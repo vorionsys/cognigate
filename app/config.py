@@ -37,9 +37,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"
 
-    # External Services (future)
-    # database_url: str = ""
-    # redis_url: str = ""
+    # Gateway / Upstream
+    agentanchor_api_url: str = "https://app.agentanchorai.com/api"
+    gateway_timeout_ms: int = 30000
+    gateway_circuit_breaker_threshold: int = 5
 
 
 @lru_cache
