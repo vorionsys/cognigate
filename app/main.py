@@ -11,6 +11,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.routers import enforce, intent, proof, health, reference, agents, trust, auth_keys, tools, gateway
@@ -132,6 +133,12 @@ app.include_router(auth_keys.router, prefix=settings.api_prefix, tags=["Auth"])
 app.include_router(tools.router)
 app.include_router(gateway.router, prefix=settings.api_prefix, tags=["Gateway"])
 
+# Static files (logo, favicon)
+import os
+_static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
 
 @app.get("/status", include_in_schema=False)
 async def status() -> dict[str, str]:
@@ -147,6 +154,10 @@ async def status() -> dict[str, str]:
 @app.get("/", include_in_schema=False, response_class=HTMLResponse)
 async def root() -> str:
     """Landing page."""
+    from app.theme import get_active_theme, theme_to_css_vars
+    t = get_active_theme()
+    css_vars = theme_to_css_vars()
+    blur = "backdrop-filter: blur(12px);" if t["card_blur"] else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -154,48 +165,56 @@ async def root() -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Cognigate — The Open Governance Engine</title>
 <meta name="description" content="The open-source enforcement engine for the BASIS standard. Trust scoring, capability gating, and cryptographic audit trails for AI agents." />
+<link rel="icon" href="/static/vorion.png" type="image/png" />
+<link rel="apple-touch-icon" href="/static/vorion.png" />
 <style>
+:root {{ {css_vars} }}
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
-    background: #0a0a0f;
-    color: #e0e0e6;
+    font-family: {t['font_family']};
+    background: var(--bg-primary);
+    color: var(--text-primary);
     min-height: 100vh;
 }}
-a {{ color: #06b6d4; text-decoration: none; }}
+a {{ color: var(--accent); text-decoration: none; }}
 a:hover {{ text-decoration: underline; }}
+::selection {{ background: var(--selection-bg); }}
+::-webkit-scrollbar {{ width: 6px; }}
+::-webkit-scrollbar-track {{ background: var(--scroll-track); }}
+::-webkit-scrollbar-thumb {{ background: var(--scroll-thumb); border-radius: 3px; }}
+::-webkit-scrollbar-thumb:hover {{ background: var(--scroll-thumb-hover); }}
 
 .nav {{
     display: flex; gap: 1.5rem; padding: 1rem 2rem;
-    background: #111118; border-bottom: 1px solid #1e1e2e;
-    align-items: center; flex-wrap: wrap;
+    background: var(--bg-nav); border-bottom: 1px solid var(--border);
+    align-items: center; flex-wrap: wrap; {blur}
 }}
-.nav-brand {{ font-weight: 700; font-size: 1.1rem; color: #06b6d4; margin-right: auto; }}
-.nav a {{ color: #888; font-size: 0.85rem; padding: 0.3rem 0.6rem; border-radius: 4px; transition: all 0.2s; }}
-.nav a:hover {{ color: #06b6d4; background: rgba(6,182,212,0.1); text-decoration: none; }}
+.nav-brand {{ font-weight: 700; font-size: 1.1rem; color: var(--accent); margin-right: auto; }}
+.nav a {{ color: var(--text-secondary); font-size: 0.85rem; padding: 0.3rem 0.6rem; border-radius: 4px; transition: all 0.2s; }}
+.nav a:hover {{ color: var(--accent); background: var(--accent-muted); text-decoration: none; }}
 
 .hero {{
     max-width: 900px; margin: 0 auto; padding: 5rem 2rem 3rem;
     text-align: center;
 }}
 .hero h1 {{
-    font-size: 3rem; color: #fff; line-height: 1.15; margin-bottom: 1rem;
+    font-size: 3rem; color: var(--text-heading); line-height: 1.15; margin-bottom: 1rem;
     letter-spacing: -0.03em;
 }}
-.hero h1 span {{ color: #06b6d4; }}
+.hero h1 span {{ color: var(--accent); }}
 .hero .subtitle {{
-    font-size: 1.15rem; color: #888; max-width: 600px; margin: 0 auto 2rem;
+    font-size: 1.15rem; color: var(--text-secondary); max-width: 600px; margin: 0 auto 2rem;
     line-height: 1.6;
 }}
 .badge {{
     display: inline-flex; align-items: center; gap: 0.5rem;
     padding: 0.35rem 0.85rem; border-radius: 99px;
-    background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2);
-    color: #06b6d4; font-size: 0.8rem; font-weight: 600; margin-bottom: 1.5rem;
+    background: var(--accent-muted); border: 1px solid var(--border-hover);
+    color: var(--accent); font-size: 0.8rem; font-weight: 600; margin-bottom: 1.5rem;
 }}
 .badge::before {{
     content: ''; width: 6px; height: 6px; border-radius: 50%;
-    background: #06b6d4; animation: pulse 2s infinite;
+    background: var(--accent); animation: pulse 2s infinite;
 }}
 @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.4; }} }}
 
@@ -205,19 +224,19 @@ a:hover {{ text-decoration: underline; }}
     padding: 0.75rem 1.5rem; border-radius: 8px;
     font-weight: 600; font-size: 0.95rem; transition: all 0.2s;
 }}
-.cta-primary {{ background: #06b6d4; color: #000; }}
-.cta-primary:hover {{ background: #22d3ee; text-decoration: none; }}
-.cta-secondary {{ background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); }}
+.cta-primary {{ background: var(--accent); color: var(--btn-text); }}
+.cta-primary:hover {{ background: var(--accent-hover); text-decoration: none; }}
+.cta-secondary {{ background: rgba(255,255,255,0.05); color: var(--text-heading); border: 1px solid var(--border-divider); }}
 .cta-secondary:hover {{ background: rgba(255,255,255,0.1); text-decoration: none; }}
 
 .stack {{
     max-width: 900px; margin: 0 auto; padding: 0 2rem 4rem;
 }}
 .stack h2 {{
-    text-align: center; font-size: 1.6rem; color: #fff; margin-bottom: 0.5rem;
+    text-align: center; font-size: 1.6rem; color: var(--text-heading); margin-bottom: 0.5rem;
 }}
 .stack .stack-sub {{
-    text-align: center; color: #888; margin-bottom: 2rem; font-size: 0.95rem;
+    text-align: center; color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.95rem;
 }}
 
 .pipe {{
@@ -225,85 +244,88 @@ a:hover {{ text-decoration: underline; }}
 }}
 @media (max-width: 700px) {{ .pipe {{ grid-template-columns: 1fr 1fr; }} }}
 .pipe-item {{
-    background: #111118; border: 1px solid #1e1e2e; border-radius: 10px;
-    padding: 1.5rem; text-align: center; transition: border-color 0.2s;
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.5rem; text-align: center; transition: border-color 0.2s; {blur}
 }}
-.pipe-item:hover {{ border-color: rgba(6,182,212,0.4); }}
+.pipe-item:hover {{ border-color: var(--border-hover); }}
 .pipe-label {{
     font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
     text-transform: uppercase; margin-bottom: 0.5rem;
 }}
-.pipe-item:nth-child(1) .pipe-label {{ color: #fbbf24; }}
-.pipe-item:nth-child(2) .pipe-label {{ color: #60a5fa; }}
-.pipe-item:nth-child(3) .pipe-label {{ color: #818cf8; }}
-.pipe-item:nth-child(4) .pipe-label {{ color: #34d399; }}
-.pipe-name {{ font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }}
-.pipe-desc {{ font-size: 0.82rem; color: #888; line-height: 1.5; }}
+.pipe-item:nth-child(1) .pipe-label {{ color: var(--layer-basis); }}
+.pipe-item:nth-child(2) .pipe-label {{ color: var(--layer-intent); }}
+.pipe-item:nth-child(3) .pipe-label {{ color: var(--layer-enforce); }}
+.pipe-item:nth-child(4) .pipe-label {{ color: var(--layer-proof); }}
+.pipe-name {{ font-size: 1.3rem; font-weight: 700; color: var(--text-heading); margin-bottom: 0.5rem; }}
+.pipe-desc {{ font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; }}
 
 .features {{
     max-width: 900px; margin: 0 auto; padding: 0 2rem 4rem;
 }}
 .features h2 {{
-    text-align: center; font-size: 1.6rem; color: #fff; margin-bottom: 2rem;
+    text-align: center; font-size: 1.6rem; color: var(--text-heading); margin-bottom: 2rem;
 }}
 .feat-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }}
 @media (max-width: 600px) {{ .feat-grid {{ grid-template-columns: 1fr; }} }}
 .feat {{
-    background: #111118; border: 1px solid #1e1e2e; border-radius: 10px;
-    padding: 1.25rem; transition: border-color 0.2s;
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.25rem; transition: border-color 0.2s; {blur}
 }}
-.feat:hover {{ border-color: rgba(6,182,212,0.3); }}
-.feat h3 {{ color: #fff; font-size: 1rem; margin-bottom: 0.4rem; }}
-.feat p {{ color: #888; font-size: 0.85rem; line-height: 1.5; }}
+.feat:hover {{ border-color: var(--border-hover); }}
+.feat h3 {{ color: var(--text-heading); font-size: 1rem; margin-bottom: 0.4rem; }}
+.feat p {{ color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; }}
 
 .tools-section {{
     max-width: 900px; margin: 0 auto; padding: 0 2rem 4rem;
 }}
 .tools-section h2 {{
-    text-align: center; font-size: 1.6rem; color: #fff; margin-bottom: 0.5rem;
+    text-align: center; font-size: 1.6rem; color: var(--text-heading); margin-bottom: 0.5rem;
 }}
 .tools-sub {{
-    text-align: center; color: #888; margin-bottom: 2rem; font-size: 0.95rem;
+    text-align: center; color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.95rem;
 }}
 .tool-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }}
 @media (max-width: 700px) {{ .tool-grid {{ grid-template-columns: 1fr 1fr; }} }}
 .tool-card {{
-    background: #111118; border: 1px solid #1e1e2e; border-radius: 10px;
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 1.25rem; text-align: center; transition: all 0.2s;
-    display: block; color: inherit;
+    display: block; color: inherit; {blur}
 }}
-.tool-card:hover {{ border-color: #06b6d4; text-decoration: none; transform: translateY(-2px); }}
+.tool-card:hover {{ border-color: var(--accent); text-decoration: none; transform: translateY(-2px); }}
 .tool-icon {{ font-size: 1.8rem; margin-bottom: 0.5rem; }}
-.tool-card h3 {{ color: #fff; font-size: 0.95rem; margin-bottom: 0.3rem; }}
-.tool-card p {{ color: #666; font-size: 0.8rem; }}
+.tool-card h3 {{ color: var(--text-heading); font-size: 0.95rem; margin-bottom: 0.3rem; }}
+.tool-card p {{ color: var(--text-tertiary); font-size: 0.8rem; }}
 
 .open-source {{
     max-width: 900px; margin: 0 auto; padding: 0 2rem 4rem; text-align: center;
 }}
 .os-box {{
-    background: #111118; border: 1px solid #1e1e2e; border-radius: 12px;
-    padding: 2.5rem; display: inline-block; max-width: 600px;
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 2.5rem; display: inline-block; max-width: 600px; {blur}
 }}
-.os-box h2 {{ color: #fff; font-size: 1.4rem; margin-bottom: 0.75rem; }}
-.os-box p {{ color: #888; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem; }}
+.os-box h2 {{ color: var(--text-heading); font-size: 1.4rem; margin-bottom: 0.75rem; }}
+.os-box p {{ color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem; }}
 .os-box code {{
-    display: block; background: #0d0d14; border: 1px solid #2a2a3a;
-    padding: 0.75rem 1rem; border-radius: 6px; color: #06b6d4;
+    display: block; background: var(--bg-code); border: 1px solid var(--border-input);
+    padding: 0.75rem 1rem; border-radius: 6px; color: var(--accent);
     font-size: 0.9rem; margin-bottom: 1rem;
 }}
 
 footer {{
-    border-top: 1px solid #1e1e2e; padding: 2rem;
-    text-align: center; color: #555; font-size: 0.8rem;
+    border-top: 1px solid var(--border); padding: 2rem;
+    text-align: center; color: var(--text-tertiary); font-size: 0.8rem;
 }}
-footer a {{ color: #666; }}
-footer a:hover {{ color: #06b6d4; }}
+footer a {{ color: var(--text-tertiary); }}
+footer a:hover {{ color: var(--accent); }}
 </style>
 </head>
 <body>
 
 <nav class="nav">
-    <span class="nav-brand">Cognigate</span>
+    <a href="/" class="nav-brand" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;">
+        <img src="/static/vorion.png" alt="Cognigate" width="28" height="28" style="border-radius:6px;" />
+        Cognigate
+    </a>
     <a href="/docs">API Docs</a>
     <a href="/redoc">ReDoc</a>
     <a href="/tools/calculator">Trust Calculator</a>
