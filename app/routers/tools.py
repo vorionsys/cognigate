@@ -159,7 +159,7 @@ _BASE_STYLE = _build_base_style()
 _NAV_HTML = """
 <nav class="nav">
     <a href="/" class="nav-brand" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;">
-        <img src="/static/vorion.png" alt="Cognigate" width="24" height="24" style="border-radius:4px;" />
+        <img src="/static/cognigate-logo.png" alt="Cognigate" width="24" height="24" style="border-radius:4px;" />
         Cognigate
     </a>
     <a href="/docs">API Docs</a>

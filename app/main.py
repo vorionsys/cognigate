@@ -165,8 +165,8 @@ async def root() -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Cognigate — The Open Governance Engine</title>
 <meta name="description" content="The open-source enforcement engine for the BASIS standard. Trust scoring, capability gating, and cryptographic audit trails for AI agents." />
-<link rel="icon" href="/static/vorion.png" type="image/png" />
-<link rel="apple-touch-icon" href="/static/vorion.png" />
+<link rel="icon" href="/static/cognigate-logo.png" type="image/png" />
+<link rel="apple-touch-icon" href="/static/cognigate-logo.png" />
 <style>
 :root {{ {css_vars} }}
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -323,7 +323,7 @@ footer a:hover {{ color: var(--accent); }}
 
 <nav class="nav">
     <a href="/" class="nav-brand" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;">
-        <img src="/static/vorion.png" alt="Cognigate" width="28" height="28" style="border-radius:6px;" />
+        <img src="/static/cognigate-logo.png" alt="Cognigate" width="28" height="28" style="border-radius:6px;" />
         Cognigate
     </a>
     <a href="/docs">API Docs</a>
