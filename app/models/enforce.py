@@ -3,11 +3,33 @@ ENFORCE layer models - Policy validation and gating.
 """
 
 from typing import Optional, Literal, Any
+from enum import Enum
 from pydantic import BaseModel, Field
 from datetime import datetime
 
 from .common import generate_id, utc_now, TrustLevel
 from .intent import StructuredPlan
+
+
+class RigorMode(str, Enum):
+    """
+    Proportional enforcement rigor levels.
+
+    - LITE: Check only critical policies (~50% faster)
+      - Best for: High-trust agents (L4-L5), low-risk operations
+      - Policies: Security violations, hard constraints only
+
+    - STANDARD: Check all policies (current behavior)
+      - Best for: Medium-trust agents (L2-L3)
+      - Policies: All BASIS policies
+
+    - STRICT: All policies + AI critic validation (slower, thorough)
+      - Best for: Low-trust agents (L0-L1), high-risk operations
+      - Policies: All BASIS + AI review + enhanced auditing
+    """
+    LITE = "lite"
+    STANDARD = "standard"
+    STRICT = "strict"
 
 
 class PolicyViolation(BaseModel):
@@ -33,6 +55,7 @@ class EnforceRequest(BaseModel):
     entity_id: str = Field(..., description="ID of the requesting entity")
     trust_level: TrustLevel = Field(..., description="Entity's current trust level")
     trust_score: int = Field(..., ge=0, le=1000, description="Entity's current trust score")
+    rigor_mode: Optional[RigorMode] = Field(None, description="Enforcement rigor (auto-selected from trust level if not provided)")
     context: dict[str, Any] = Field(default_factory=dict, description="Additional context for enforcement")
 
 
@@ -63,6 +86,7 @@ class EnforceResponse(BaseModel):
     modifications: Optional[dict[str, Any]] = Field(None, description="Required modifications to the plan")
 
     # Metadata
+    rigor_mode: RigorMode = Field(..., description="Enforcement rigor level used")
     decided_at: datetime = Field(default_factory=utc_now)
     duration_ms: float = Field(..., description="Processing time in milliseconds")
 

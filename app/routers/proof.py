@@ -8,14 +8,17 @@ of all governance decisions for audit and compliance.
 """
 
 import hashlib
-import time
+import json
 import structlog
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.proof import ProofRecord, ProofQuery, ProofVerification, ProofStats
 from app.models.enforce import EnforceResponse
+from app.db import get_session, ProofRepository
+from app.core.signatures import sign_proof_record, verify_proof_signature
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -28,20 +31,15 @@ ACTION_TO_DECISION = {
     "modify": "modified",
 }
 
-# In-memory proof chain (in production, use a database)
-PROOF_CHAIN: list[ProofRecord] = []
-LAST_HASH = "0" * 64  # Genesis hash
-
 
 def calculate_hash(data: dict) -> str:
     """Calculate SHA-256 hash of data."""
-    import json
-
     serialized = json.dumps(data, sort_keys=True, default=str)
     return hashlib.sha256(serialized.encode()).hexdigest()
 
 
-def create_proof_record(
+async def create_proof_record(
+    session: AsyncSession,
     intent_id: str,
     verdict_id: str,
     entity_id: str,
@@ -53,13 +51,17 @@ def create_proof_record(
     """
     Create a new proof record and add it to the chain.
     """
-    global LAST_HASH
+    repo = ProofRepository(session)
+
+    # Get current chain state from database
+    last_hash = await repo.get_last_hash()
+    chain_length = await repo.get_chain_length()
 
     inputs_hash = calculate_hash(inputs)
     outputs_hash = calculate_hash(outputs)
 
     record = ProofRecord(
-        chain_position=len(PROOF_CHAIN),
+        chain_position=chain_length,
         intent_id=intent_id,
         verdict_id=verdict_id,
         entity_id=entity_id,
@@ -67,7 +69,7 @@ def create_proof_record(
         decision=decision,
         inputs_hash=inputs_hash,
         outputs_hash=outputs_hash,
-        previous_hash=LAST_HASH,
+        previous_hash=last_hash,
         hash="",  # Calculated below
     )
 
@@ -86,9 +88,12 @@ def create_proof_record(
         "created_at": record.created_at.isoformat(),
     }
     record.hash = calculate_hash(record_data)
-    LAST_HASH = record.hash
 
-    PROOF_CHAIN.append(record)
+    # Sign the record (includes hash in signature)
+    record.signature = sign_proof_record(record_data)
+
+    # Persist to database
+    await repo.create(record)
 
     logger.info(
         "proof_created",
@@ -101,7 +106,10 @@ def create_proof_record(
 
 
 @router.post("/proof", response_model=ProofRecord)
-async def create_proof(verdict: EnforceResponse) -> ProofRecord:
+async def create_proof(
+    verdict: EnforceResponse,
+    session: AsyncSession = Depends(get_session),
+) -> ProofRecord:
     """
     Create an immutable proof record from an enforcement verdict.
 
@@ -113,7 +121,8 @@ async def create_proof(verdict: EnforceResponse) -> ProofRecord:
 
     The proof chain is append-only and tamper-evident.
     """
-    record = create_proof_record(
+    record = await create_proof_record(
+        session=session,
         intent_id=verdict.intent_id,
         verdict_id=verdict.verdict_id,
         entity_id="system",  # Would come from context
@@ -131,90 +140,68 @@ async def create_proof(verdict: EnforceResponse) -> ProofRecord:
 
 
 @router.get("/proof/stats", response_model=ProofStats)
-async def get_proof_stats() -> ProofStats:
+async def get_proof_stats(
+    session: AsyncSession = Depends(get_session),
+) -> ProofStats:
     """
     Get statistics about the proof ledger.
     """
-    decisions = {}
-    for record in PROOF_CHAIN:
-        decisions[record.decision] = decisions.get(record.decision, 0) + 1
+    repo = ProofRepository(session)
+
+    # Get stats from database
+    stats = await repo.get_stats()
 
     # Verify chain integrity
-    chain_valid = True
-    for i, record in enumerate(PROOF_CHAIN):
-        if i == 0:
-            continue
-        previous = PROOF_CHAIN[i - 1]
-        if record.previous_hash != previous.hash:
-            chain_valid = False
-            break
+    chain_valid, _ = await repo.verify_chain_integrity()
 
     return ProofStats(
-        total_records=len(PROOF_CHAIN),
-        chain_length=len(PROOF_CHAIN),
-        last_record_at=PROOF_CHAIN[-1].created_at if PROOF_CHAIN else None,
-        records_by_decision=decisions,
+        total_records=stats["total_records"],
+        chain_length=stats["chain_length"],
+        last_record_at=stats["last_record_at"],
+        records_by_decision=stats["records_by_decision"],
         chain_integrity=chain_valid,
     )
 
 
 @router.get("/proof/{proof_id}", response_model=ProofRecord)
-async def get_proof(proof_id: str) -> ProofRecord:
+async def get_proof(
+    proof_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> ProofRecord:
     """
     Retrieve a proof record by ID.
     """
-    for record in PROOF_CHAIN:
-        if record.proof_id == proof_id:
-            return record
+    repo = ProofRepository(session)
+    record = await repo.get_by_id(proof_id)
 
-    raise HTTPException(status_code=404, detail=f"Proof {proof_id} not found")
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Proof {proof_id} not found")
+
+    return record
 
 
 @router.post("/proof/query", response_model=list[ProofRecord])
-async def query_proofs(query: ProofQuery) -> list[ProofRecord]:
+async def query_proofs(
+    query: ProofQuery,
+    session: AsyncSession = Depends(get_session),
+) -> list[ProofRecord]:
     """
     Query proof records with filters.
     """
-    results = PROOF_CHAIN.copy()
-
-    if query.entity_id:
-        results = [r for r in results if r.entity_id == query.entity_id]
-
-    if query.intent_id:
-        results = [r for r in results if r.intent_id == query.intent_id]
-
-    if query.verdict_id:
-        results = [r for r in results if r.verdict_id == query.verdict_id]
-
-    if query.decision:
-        results = [r for r in results if r.decision == query.decision]
-
-    if query.start_date:
-        results = [r for r in results if r.created_at >= query.start_date]
-
-    if query.end_date:
-        results = [r for r in results if r.created_at <= query.end_date]
-
-    # Sort by chain position (oldest first)
-    results.sort(key=lambda r: r.chain_position)
-
-    # Apply pagination
-    start = query.offset
-    end = start + query.limit
-
-    return results[start:end]
+    repo = ProofRepository(session)
+    return await repo.query(query)
 
 
 @router.get("/proof/{proof_id}/verify", response_model=ProofVerification)
-async def verify_proof(proof_id: str) -> ProofVerification:
+async def verify_proof(
+    proof_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> ProofVerification:
     """
     Verify the integrity of a proof record and its chain linkage.
     """
-    record: Optional[ProofRecord] = None
-    for r in PROOF_CHAIN:
-        if r.proof_id == proof_id:
-            record = r
-            break
+    repo = ProofRepository(session)
+    record = await repo.get_by_id(proof_id)
 
     if not record:
         raise HTTPException(status_code=404, detail=f"Proof {proof_id} not found")
@@ -244,15 +231,22 @@ async def verify_proof(proof_id: str) -> ProofVerification:
     # Verify chain linkage
     chain_valid = True
     if record.chain_position > 0:
-        previous = PROOF_CHAIN[record.chain_position - 1]
-        if record.previous_hash != previous.hash:
+        previous = await repo.get_by_position(record.chain_position - 1)
+        if previous and record.previous_hash != previous.hash:
             chain_valid = False
             issues.append("Chain linkage broken")
 
+    # Verify signature if present
+    signature_valid = None
+    if record.signature:
+        signature_valid = verify_proof_signature(record_data, record.signature)
+        if not signature_valid:
+            issues.append("Signature verification failed")
+
     return ProofVerification(
         proof_id=proof_id,
-        valid=hash_valid and chain_valid,
+        valid=hash_valid and chain_valid and (signature_valid is not False),
         chain_valid=chain_valid,
-        signature_valid=None,  # Not implemented yet
+        signature_valid=signature_valid,
         issues=issues,
     )

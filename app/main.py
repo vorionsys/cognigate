@@ -10,11 +10,17 @@ from typing import AsyncGenerator
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.routers import enforce, intent, proof, health, reference, agents, trust, auth_keys, tools, gateway
+from app.routers import enforce, intent, proof, health, admin, reference, agents, trust, auth_keys, tools, gateway
+from app.core.cache import cache_manager
+from app.core.async_logger import async_log_queue
+from app.core.signatures import signature_manager
+from app.core.policy_engine import policy_engine
+from app.db import init_db, close_db
 
 # Configure structured logging
 structlog.configure(
@@ -47,7 +53,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         version=settings.app_version,
         environment=settings.environment,
     )
+    # Initialize async logger
+    await async_log_queue.start()
+    # Initialize database
+    await init_db()
+    # Initialize Redis cache (graceful degradation if unavailable)
+    await cache_manager.connect()
+    # Initialize signature manager
+    if settings.signature_enabled:
+        signature_manager.initialize(
+            key_path=settings.signature_key_path or None
+        )
+    # Initialize policy engine with default policies
+    policy_engine.load_default_policies()
+    logger.info("policy_engine_initialized", policies=len(policy_engine.list_policies()))
     yield
+    # Cleanup
+    await cache_manager.disconnect()
+    await close_db()
+    await async_log_queue.stop()
     logger.info("cognigate_shutdown")
 
 
@@ -121,11 +145,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Compression middleware - Reduces JSON response sizes by 60-80%
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 # Include routers
 app.include_router(health.router, tags=["Health"])
 app.include_router(intent.router, prefix=settings.api_prefix, tags=["Intent"])
 app.include_router(enforce.router, prefix=settings.api_prefix, tags=["Enforce"])
 app.include_router(proof.router, prefix=settings.api_prefix, tags=["Proof"])
+app.include_router(admin.router, prefix=settings.api_prefix, tags=["Admin"])
 app.include_router(reference.router, prefix=settings.api_prefix, tags=["Reference Data"])
 app.include_router(agents.router, prefix=settings.api_prefix, tags=["Agents"])
 app.include_router(trust.router, prefix=settings.api_prefix, tags=["Trust"])
@@ -458,3 +486,51 @@ footer a:hover {{ color: var(--accent); }}
 
 </body>
 </html>"""
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots():
+    """Serve robots.txt for search engine crawlers."""
+    content = """User-agent: *
+Allow: /
+
+Sitemap: https://cognigate.dev/sitemap.xml
+"""
+    return PlainTextResponse(content=content, media_type="text/plain")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap():
+    """Serve sitemap.xml for search engines."""
+    from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://cognigate.dev/</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://cognigate.dev/docs</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://cognigate.dev/status</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://cognigate.dev/redoc</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>
+"""
+    return Response(content=content, media_type="application/xml")
