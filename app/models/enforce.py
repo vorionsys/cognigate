@@ -16,15 +16,15 @@ class RigorMode(str, Enum):
     Proportional enforcement rigor levels.
 
     - LITE: Check only critical policies (~50% faster)
-      - Best for: High-trust agents (L4-L5), low-risk operations
+      - Best for: High-trust agents (T5-T7), low-risk operations
       - Policies: Security violations, hard constraints only
 
     - STANDARD: Check all policies (current behavior)
-      - Best for: Medium-trust agents (L2-L3)
+      - Best for: Medium-trust agents (T3-T4)
       - Policies: All BASIS policies
 
     - STRICT: All policies + AI critic validation (slower, thorough)
-      - Best for: Low-trust agents (L0-L1), high-risk operations
+      - Best for: Low-trust agents (T0-T2), high-risk operations
       - Policies: All BASIS + AI review + enhanced auditing
     """
     LITE = "lite"

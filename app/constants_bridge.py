@@ -54,14 +54,14 @@ TIER_THRESHOLDS: dict[int, dict[str, Any]] = {
     },
     TrustTier.T2_PROVISIONAL: {
         "min": 350,
-        "max": 500,
+        "max": 499,
         "name": "Provisional",
         "description": "Basic operations, heavy supervision",
         "color": "#f97316",
         "textColor": "#ffffff",
     },
     TrustTier.T3_MONITORED: {
-        "min": 501,
+        "min": 500,
         "max": 649,
         "name": "Monitored",
         "description": "Standard operations with continuous monitoring",
@@ -115,7 +115,7 @@ def score_to_tier(score: int) -> TrustTier:
         return TrustTier.T5_TRUSTED
     if score >= 650:
         return TrustTier.T4_STANDARD
-    if score >= 501:
+    if score >= 500:
         return TrustTier.T3_MONITORED
     if score >= 350:
         return TrustTier.T2_PROVISIONAL

@@ -60,15 +60,18 @@ curl -H "X-API-Key: your-api-key" https://cognigate.dev/v1/intent
 
 ## Trust Levels
 
-Cognigate uses a 5-tier trust system (0-4) mapped to trust scores (0-1000):
+Cognigate uses a canonical 8-tier trust system (T0-T7) mapped to trust scores (0-1000):
 
-| Level | Name | Score Range | Capabilities |
-|-------|------|-------------|--------------|
-| 0 | Untrusted | 0-199 | Read-only, sandboxed |
-| 1 | Provisional | 200-399 | Basic operations, internal APIs |
-| 2 | Trusted | 400-599 | External APIs, standard data |
-| 3 | Verified | 600-799 | PII access, shell execution |
-| 4 | Privileged | 800-1000 | Full autonomy, admin operations |
+| Tier | Name | Score Range | Capabilities |
+|------|------|-------------|--------------|
+| T0 | Sandbox | 0-199 | Read-only, sandboxed execution |
+| T1 | Observed | 200-349 | Read-only, monitored |
+| T2 | Provisional | 350-499 | Basic operations, heavy supervision |
+| T3 | Monitored | 500-649 | Standard operations, continuous monitoring |
+| T4 | Standard | 650-799 | External API access, policy-governed |
+| T5 | Trusted | 800-875 | Cross-agent communication, delegated tasks |
+| T6 | Certified | 876-950 | Admin tasks, agent spawning, minimal oversight |
+| T7 | Autonomous | 951-1000 | Full autonomy, self-governance |
 
 ---
 
@@ -120,7 +123,7 @@ Normalize an intent into a structured plan.
 | `goal` | string | Yes | The goal/prompt to process (1-4096 chars) |
 | `context` | object | No | Additional context for intent processing |
 | `metadata` | object | No | Request metadata |
-| `trust_level` | integer | No | Override trust level (0-4) if authorized |
+| `trust_level` | integer | No | Override trust level (0-7) if authorized |
 
 **Response** `200 OK`
 
@@ -154,7 +157,7 @@ Normalize an intent into a structured plan.
 | `entity_id` | string | Requesting entity ID |
 | `status` | string | `normalized` \| `error` |
 | `plan` | object | Structured plan (see below) |
-| `trust_level` | integer | Entity's trust level (0-4) |
+| `trust_level` | integer | Entity's trust level (0-7) |
 | `trust_score` | integer | Entity's trust score (0-1000) |
 | `created_at` | datetime | ISO 8601 timestamp |
 | `error` | string | Error message if status is `error` |
@@ -220,7 +223,7 @@ Validate a plan against BASIS policies.
 | `plan` | object | Yes | Structured plan from INTENT |
 | `policy_ids` | string[] | No | Specific policies to check (empty = all) |
 | `entity_id` | string | Yes | Requesting entity ID |
-| `trust_level` | integer | Yes | Entity's current trust level (0-4) |
+| `trust_level` | integer | Yes | Entity's current trust level (0-7) |
 | `trust_score` | integer | Yes | Entity's current trust score (0-1000) |
 | `context` | object | No | Additional enforcement context |
 

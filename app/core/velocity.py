@@ -68,38 +68,56 @@ class VelocityCheckResult:
     message: str = ""
 
 
-# Default velocity limits by trust level
+# Default velocity limits by trust level — canonical 8-tier model (T0-T7)
 # Higher trust = higher limits
 VELOCITY_LIMITS_BY_TRUST = {
-    0: {  # Untrusted
+    0: {  # T0 Sandbox
         VelocityTier.L0_BURST: VelocityLimit(VelocityTier.L0_BURST, 2, 1, "2 actions/second"),
         VelocityTier.L1_SUSTAINED: VelocityLimit(VelocityTier.L1_SUSTAINED, 10, 60, "10 actions/minute"),
         VelocityTier.L2_HOURLY: VelocityLimit(VelocityTier.L2_HOURLY, 50, 3600, "50 actions/hour"),
         VelocityTier.L2_DAILY: VelocityLimit(VelocityTier.L2_DAILY, 200, 86400, "200 actions/day"),
     },
-    1: {  # Provisional
+    1: {  # T1 Observed
         VelocityTier.L0_BURST: VelocityLimit(VelocityTier.L0_BURST, 5, 1, "5 actions/second"),
         VelocityTier.L1_SUSTAINED: VelocityLimit(VelocityTier.L1_SUSTAINED, 30, 60, "30 actions/minute"),
         VelocityTier.L2_HOURLY: VelocityLimit(VelocityTier.L2_HOURLY, 200, 3600, "200 actions/hour"),
         VelocityTier.L2_DAILY: VelocityLimit(VelocityTier.L2_DAILY, 1000, 86400, "1000 actions/day"),
     },
-    2: {  # Trusted
+    2: {  # T2 Provisional
         VelocityTier.L0_BURST: VelocityLimit(VelocityTier.L0_BURST, 10, 1, "10 actions/second"),
         VelocityTier.L1_SUSTAINED: VelocityLimit(VelocityTier.L1_SUSTAINED, 60, 60, "60 actions/minute"),
         VelocityTier.L2_HOURLY: VelocityLimit(VelocityTier.L2_HOURLY, 500, 3600, "500 actions/hour"),
         VelocityTier.L2_DAILY: VelocityLimit(VelocityTier.L2_DAILY, 5000, 86400, "5000 actions/day"),
     },
-    3: {  # Verified
+    3: {  # T3 Monitored
         VelocityTier.L0_BURST: VelocityLimit(VelocityTier.L0_BURST, 20, 1, "20 actions/second"),
         VelocityTier.L1_SUSTAINED: VelocityLimit(VelocityTier.L1_SUSTAINED, 120, 60, "120 actions/minute"),
         VelocityTier.L2_HOURLY: VelocityLimit(VelocityTier.L2_HOURLY, 2000, 3600, "2000 actions/hour"),
         VelocityTier.L2_DAILY: VelocityLimit(VelocityTier.L2_DAILY, 20000, 86400, "20000 actions/day"),
     },
-    4: {  # Privileged
+    4: {  # T4 Standard
         VelocityTier.L0_BURST: VelocityLimit(VelocityTier.L0_BURST, 50, 1, "50 actions/second"),
         VelocityTier.L1_SUSTAINED: VelocityLimit(VelocityTier.L1_SUSTAINED, 300, 60, "300 actions/minute"),
         VelocityTier.L2_HOURLY: VelocityLimit(VelocityTier.L2_HOURLY, 10000, 3600, "10000 actions/hour"),
         VelocityTier.L2_DAILY: VelocityLimit(VelocityTier.L2_DAILY, 100000, 86400, "100000 actions/day"),
+    },
+    5: {  # T5 Trusted
+        VelocityTier.L0_BURST: VelocityLimit(VelocityTier.L0_BURST, 100, 1, "100 actions/second"),
+        VelocityTier.L1_SUSTAINED: VelocityLimit(VelocityTier.L1_SUSTAINED, 600, 60, "600 actions/minute"),
+        VelocityTier.L2_HOURLY: VelocityLimit(VelocityTier.L2_HOURLY, 25000, 3600, "25000 actions/hour"),
+        VelocityTier.L2_DAILY: VelocityLimit(VelocityTier.L2_DAILY, 250000, 86400, "250000 actions/day"),
+    },
+    6: {  # T6 Certified
+        VelocityTier.L0_BURST: VelocityLimit(VelocityTier.L0_BURST, 200, 1, "200 actions/second"),
+        VelocityTier.L1_SUSTAINED: VelocityLimit(VelocityTier.L1_SUSTAINED, 1200, 60, "1200 actions/minute"),
+        VelocityTier.L2_HOURLY: VelocityLimit(VelocityTier.L2_HOURLY, 50000, 3600, "50000 actions/hour"),
+        VelocityTier.L2_DAILY: VelocityLimit(VelocityTier.L2_DAILY, 500000, 86400, "500000 actions/day"),
+    },
+    7: {  # T7 Autonomous
+        VelocityTier.L0_BURST: VelocityLimit(VelocityTier.L0_BURST, 500, 1, "500 actions/second"),
+        VelocityTier.L1_SUSTAINED: VelocityLimit(VelocityTier.L1_SUSTAINED, 3000, 60, "3000 actions/minute"),
+        VelocityTier.L2_HOURLY: VelocityLimit(VelocityTier.L2_HOURLY, 100000, 3600, "100000 actions/hour"),
+        VelocityTier.L2_DAILY: VelocityLimit(VelocityTier.L2_DAILY, 1000000, 86400, "1000000 actions/day"),
     },
 }
 
@@ -148,7 +166,7 @@ class VelocityTracker:
 
         Args:
             entity_id: The entity to check
-            trust_level: Entity's trust level (0-4)
+            trust_level: Entity's trust level (0-7)
 
         Returns:
             VelocityCheckResult with allowed=True/False

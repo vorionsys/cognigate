@@ -379,7 +379,7 @@ class PolicyEngine:
                         type="tool_restriction",
                         condition="'shell' in tools_required and trust_level < 3",
                         severity=Severity.CRITICAL,
-                        message="Shell execution requires Verified (L3) trust level",
+                        message="Shell execution requires Monitored (T3) trust level",
                     ),
                     Constraint(
                         id="no-delete-without-approval",
@@ -401,7 +401,7 @@ class PolicyEngine:
                         type="data_protection",
                         condition="any('pii_*', data_classifications) and trust_level < 2",
                         severity=Severity.CRITICAL,
-                        message="PII access requires Trusted (L2) trust level",
+                        message="PII access requires Provisional (T2) trust level",
                     ),
                     Constraint(
                         id="credentials-audit",

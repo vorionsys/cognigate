@@ -25,16 +25,19 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
-# Rigor mode mapping by trust level
-# L0-L2: STRICT (low trust needs maximum scrutiny)
-# L3: STANDARD (medium trust gets standard enforcement)
-# L4-L5: LITE (high trust can skip non-critical checks)
+# Rigor mode mapping by trust level — canonical 8-tier model (T0-T7)
+# T0-T2: STRICT (low trust needs maximum scrutiny)
+# T3-T4: STANDARD (medium trust gets standard enforcement)
+# T5-T7: LITE (high trust can skip non-critical checks)
 DEFAULT_RIGOR_BY_TRUST = {
-    0: RigorMode.STRICT,    # L0: Sandbox
-    1: RigorMode.STRICT,    # L1: Supervised
-    2: RigorMode.STRICT,    # L2: Assisted
-    3: RigorMode.STANDARD,  # L3: Standard/Trusted
-    4: RigorMode.LITE,      # L4: Trusted/Certified
+    0: RigorMode.STRICT,    # T0: Sandbox
+    1: RigorMode.STRICT,    # T1: Observed
+    2: RigorMode.STRICT,    # T2: Provisional
+    3: RigorMode.STANDARD,  # T3: Monitored
+    4: RigorMode.STANDARD,  # T4: Standard
+    5: RigorMode.LITE,      # T5: Trusted
+    6: RigorMode.LITE,      # T6: Certified
+    7: RigorMode.LITE,      # T7: Autonomous
 }
 
 
@@ -43,7 +46,7 @@ def determine_rigor_mode(trust_level: int, requested_mode: RigorMode | None) -> 
     Determine enforcement rigor mode.
 
     Args:
-        trust_level: Entity's trust level (0-4)
+        trust_level: Entity's trust level (0-7)
         requested_mode: Explicitly requested mode (optional)
 
     Returns:
