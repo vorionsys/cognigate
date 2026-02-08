@@ -47,31 +47,52 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan manager."""
+    """Application lifespan manager — fault-tolerant for serverless."""
     logger.info(
         "cognigate_starting",
         version=settings.app_version,
         environment=settings.environment,
     )
-    # Initialize async logger
-    await async_log_queue.start()
-    # Initialize database
-    await init_db()
-    # Initialize Redis cache (graceful degradation if unavailable)
-    await cache_manager.connect()
-    # Initialize signature manager
-    if settings.signature_enabled:
-        signature_manager.initialize(
-            key_path=settings.signature_key_path or None
-        )
-    # Initialize policy engine with default policies
-    policy_engine.load_default_policies()
-    logger.info("policy_engine_initialized", policies=len(policy_engine.list_policies()))
+    # Each subsystem initializes independently; failures are logged but don't
+    # prevent the rest of the application from starting.
+    try:
+        await async_log_queue.start()
+    except Exception as e:
+        logger.warning("async_logger_init_failed", error=str(e))
+    try:
+        await init_db()
+    except Exception as e:
+        logger.warning("database_init_failed", error=str(e))
+    try:
+        await cache_manager.connect()
+    except Exception as e:
+        logger.warning("cache_init_failed", error=str(e))
+    try:
+        if settings.signature_enabled:
+            signature_manager.initialize(
+                key_path=settings.signature_key_path or None
+            )
+    except Exception as e:
+        logger.warning("signature_init_failed", error=str(e))
+    try:
+        policy_engine.load_default_policies()
+        logger.info("policy_engine_initialized", policies=len(policy_engine.list_policies()))
+    except Exception as e:
+        logger.warning("policy_engine_init_failed", error=str(e))
     yield
-    # Cleanup
-    await cache_manager.disconnect()
-    await close_db()
-    await async_log_queue.stop()
+    # Cleanup — also fault-tolerant
+    try:
+        await cache_manager.disconnect()
+    except Exception:
+        pass
+    try:
+        await close_db()
+    except Exception:
+        pass
+    try:
+        await async_log_queue.stop()
+    except Exception:
+        pass
     logger.info("cognigate_shutdown")
 
 

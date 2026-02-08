@@ -2,8 +2,13 @@
 Application configuration using Pydantic Settings.
 """
 
+import os
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Auto-detect Vercel serverless (read-only filesystem, use /tmp)
+_IS_VERCEL = bool(os.environ.get("VERCEL"))
+_DEFAULT_DB_URL = "sqlite+aiosqlite:////tmp/cognigate.db" if _IS_VERCEL else "sqlite+aiosqlite:///./cognigate.db"
 
 
 class Settings(BaseSettings):
@@ -63,7 +68,7 @@ class Settings(BaseSettings):
     critic_enabled: bool = True
 
     # External Services
-    database_url: str = "sqlite+aiosqlite:///./cognigate.db"
+    database_url: str = _DEFAULT_DB_URL
     redis_url: str = "redis://localhost:6379"
     redis_enabled: bool = False  # Disabled by default, graceful degradation
 
