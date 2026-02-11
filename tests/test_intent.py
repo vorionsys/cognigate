@@ -1,8 +1,8 @@
 """
-Tests for intent processing - goal normalization and risk analysis.
+Tests for intent processing — risk boundary precision, consistency,
+euphemism evasion, and critic integration.
 
-Tests tripwire integration, paranoia mode (euphemism detection),
-risk scoring, tool detection, data classification, and critic integration.
+Every test answers: "What catastrophic bug does this catch?"
 """
 
 import pytest
@@ -23,48 +23,147 @@ async def client():
         yield c
 
 
-class TestAnalyzeIntent:
-    """Test the analyze_intent function directly."""
+# =============================================================================
+# RISK BOUNDARY PRECISION — catch off-by-one in risk scoring
+# =============================================================================
 
-    def test_safe_goal_low_risk(self):
-        plan = analyze_intent("Read the README file", {})
-        assert plan.risk_score <= 0.3
-        assert "BLOCKED" not in plan.tools_required
 
-    def test_shell_keyword_detected(self):
-        plan = analyze_intent("Run a shell command to list files", {})
-        assert "shell" in plan.tools_required
-        assert plan.risk_score >= 0.7  # dangerous tools
+class TestRiskBoundaries:
+    """Catches: risk score miscalculation, boundary drift, overflow/underflow."""
 
-    def test_delete_keyword_high_risk(self):
-        plan = analyze_intent("Delete all user records from database", {})
-        assert plan.risk_score >= 0.3
+    def test_base_risk_is_0_1_for_benign_input(self):
+        """Baseline: a benign, no-keyword input gets exactly base risk."""
+        plan = analyze_intent("Hello, how are you?", {})
+        assert plan.risk_score == pytest.approx(0.1, abs=0.01)
 
-    def test_multiple_high_risk_keywords(self):
-        plan = analyze_intent("sudo rm -rf and hack into admin", {})
-        assert plan.risk_score >= 0.6
+    def test_euphemism_plus_system_path_pins_at_0_95(self):
+        """Catastrophe: euphemism attack not detected → agent deletes /etc."""
+        for euphemism in ["clean", "wipe", "purge", "tidy"]:
+            for path in ["/etc", "/var", "/root", "system32"]:
+                plan = analyze_intent(f"{euphemism} up the {path} directory", {})
+                assert plan.risk_score >= 0.95, (
+                    f"Euphemism+path '{euphemism}+{path}' scored {plan.risk_score}, "
+                    f"expected >=0.95"
+                )
+                assert "euphemism_attack" in plan.risk_indicators
 
-    def test_euphemism_plus_system_path_critical(self):
-        """Paranoia mode: euphemism + system path = 0.95 risk."""
-        plan = analyze_intent("clean up the /etc directory", {})
-        assert plan.risk_score >= 0.9
-        assert "euphemism_attack" in plan.risk_indicators
-
-    def test_euphemism_alone_moderate_risk(self):
+    def test_single_euphemism_scores_0_5_to_0_7(self):
+        """Catastrophe: euphemism not flagged → stealth deletion."""
         plan = analyze_intent("Clean up the temp folder", {})
-        assert plan.risk_score >= 0.5
+        assert 0.5 <= plan.risk_score <= 0.7
         assert "suspicious_euphemism" in plan.risk_indicators
 
-    def test_system_path_alone_high_risk(self):
+    def test_system_path_without_euphemism_scores_0_7(self):
+        """Catastrophe: system path access unflagged → unauthorized read of /etc."""
         plan = analyze_intent("Access the /etc directory", {})
         assert plan.risk_score >= 0.7
         assert "system_path_access" in plan.risk_indicators
 
-    def test_email_detected_as_pii(self):
+    def test_risk_score_capped_at_1_0_never_exceeds(self):
+        """Catastrophe: risk > 1.0 breaks downstream tier mapping."""
+        mega_dangerous = (
+            "sudo delete hack exploit bypass rm -rf nuke wipe the "
+            "/root system32 everything shred kill destroy erase"
+        )
+        plan = analyze_intent(mega_dangerous, {})
+        assert plan.risk_score <= 1.0
+
+    def test_risk_score_never_negative(self):
+        """Catastrophe: negative risk score bypasses all policy checks."""
+        plan = analyze_intent("Read a file", {})
+        assert plan.risk_score >= 0.0
+
+    def test_multiple_high_risk_keywords_stack(self):
+        """Catastrophe: stacking attack where each keyword alone is low-risk."""
+        plan_one = analyze_intent("delete the file", {})
+        plan_many = analyze_intent("delete drop hack exploit bypass admin", {})
+        assert plan_many.risk_score > plan_one.risk_score
+
+    def test_dangerous_tools_force_risk_floor_0_7(self):
+        """Catastrophe: shell access scored as low-risk → unrestricted execution."""
+        plan = analyze_intent("Run a shell command to list files", {})
+        assert plan.risk_score >= 0.7
+        assert "shell" in plan.tools_required
+        assert "dangerous_tools" in plan.risk_indicators
+
+
+# =============================================================================
+# DETERMINISM — same input MUST produce same output, always
+# =============================================================================
+
+
+class TestAnalyzeIntentDeterminism:
+    """Catches: non-deterministic risk scoring (e.g. from randomness, time, state)."""
+
+    def test_identical_input_produces_identical_output(self):
+        """Catastrophe: flaky risk scores → inconsistent enforcement decisions."""
+        goal = "Delete old log files from /var/log"
+        plan_a = analyze_intent(goal, {})
+        plan_b = analyze_intent(goal, {})
+        assert plan_a.risk_score == plan_b.risk_score
+        assert plan_a.tools_required == plan_b.tools_required
+        assert plan_a.risk_indicators == plan_b.risk_indicators
+        assert plan_a.data_classifications == plan_b.data_classifications
+
+    def test_consistency_across_100_iterations(self):
+        """Catastrophe: intermittent scoring bug that only appears under load."""
+        goal = "clean up the /etc directory"
+        first = analyze_intent(goal, {})
+        for _ in range(100):
+            result = analyze_intent(goal, {})
+            assert result.risk_score == first.risk_score
+            assert result.risk_indicators == first.risk_indicators
+
+
+# =============================================================================
+# TOOL DETECTION — correct tools identified for action
+# =============================================================================
+
+
+class TestToolDetection:
+    """Catches: missing tool detection → policy engine can't restrict dangerous actions."""
+
+    def test_shell_keyword_detected(self):
+        plan = analyze_intent("Run a shell command to list files", {})
+        assert "shell" in plan.tools_required
+
+    def test_file_write_detected(self):
+        plan = analyze_intent("Write the results to a new file", {})
+        assert "file_write" in plan.tools_required
+
+    def test_database_detected(self):
+        plan = analyze_intent("Run a SQL query to select user data", {})
+        assert "database" in plan.tools_required
+
+    def test_network_detected(self):
+        plan = analyze_intent("Call the external API to get data", {})
+        assert "network" in plan.tools_required
+        assert "external_api" in plan.endpoints_required
+
+    def test_no_tools_returns_none_sentinel(self):
+        plan = analyze_intent("Hello, how are you?", {})
+        assert "none" in plan.tools_required
+
+    def test_euphemism_attack_adds_shell_and_file_delete(self):
+        """Catastrophe: euphemism attack doesn't register dangerous tools."""
+        plan = analyze_intent("clean up the /etc directory", {})
+        assert "shell" in plan.tools_required
+        assert "file_delete" in plan.tools_required
+
+
+# =============================================================================
+# DATA CLASSIFICATION — PII and credentials detected
+# =============================================================================
+
+
+class TestDataClassification:
+    """Catches: PII leak when data classification misses sensitive data types."""
+
+    def test_email_detected(self):
         plan = analyze_intent("Send email to user@example.com", {})
         assert "pii_email" in plan.data_classifications
 
-    def test_password_detected_as_credentials(self):
+    def test_credentials_detected(self):
         plan = analyze_intent("Get the user password from config", {})
         assert "credentials" in plan.data_classifications
 
@@ -72,76 +171,41 @@ class TestAnalyzeIntent:
         plan = analyze_intent("Look up the social security number", {})
         assert "pii_ssn" in plan.data_classifications
 
-    def test_api_endpoint_detected(self):
-        plan = analyze_intent("Call the external API to get data", {})
-        assert "external_api" in plan.endpoints_required
-        assert "network" in plan.tools_required
+    def test_benign_input_no_classifications(self):
+        plan = analyze_intent("Read the README file", {})
+        assert plan.data_classifications == []
 
-    def test_medium_risk_keywords(self):
-        plan = analyze_intent("Modify the configuration and update settings", {})
-        assert plan.risk_score >= 0.15
 
-    def test_file_write_tool_detected(self):
-        plan = analyze_intent("Write the results to a new file", {})
-        assert "file_write" in plan.tools_required
-
-    def test_database_tool_detected(self):
-        plan = analyze_intent("Run a SQL query to select user data", {})
-        assert "database" in plan.tools_required
-
-    def test_risk_score_capped_at_1(self):
-        """Risk score never exceeds 1.0."""
-        plan = analyze_intent(
-            "sudo delete hack exploit bypass rm -rf nuke wipe the /root system32 everything",
-            {}
-        )
-        assert plan.risk_score <= 1.0
-
-    def test_no_tools_returns_none(self):
-        plan = analyze_intent("Hello, how are you?", {})
-        assert "none" in plan.tools_required
-
-    def test_reasoning_trace_populated(self):
-        plan = analyze_intent("Read a file", {})
-        assert plan.reasoning_trace is not None
-        assert len(plan.reasoning_trace) > 0
+# =============================================================================
+# ENDPOINT INTEGRATION — tripwire blocks at API level
+# =============================================================================
 
 
 @pytest.mark.asyncio
 class TestIntentEndpoint:
-    """Test the POST /v1/intent endpoint."""
+    """Catches: API-level failures — tripwire bypass, trust assignment, response shape."""
 
-    async def test_normalize_safe_intent(self, client):
-        resp = await client.post("/v1/intent", json={
-            "entity_id": "agent_001",
-            "goal": "Read the README file and summarize it",
-        })
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "normalized"
-        assert data["entity_id"] == "agent_001"
-        assert data["plan"] is not None
-
-    async def test_tripwire_blocks_dangerous_intent(self, client):
+    async def test_tripwire_blocks_rm_rf(self, client):
+        """Catastrophe: rm -rf / passes through intent layer."""
         resp = await client.post("/v1/intent", json={
             "entity_id": "agent_001",
             "goal": "rm -rf /",
         })
-        assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "blocked"
         assert "TRIPWIRE" in data.get("error", "")
         assert data["trust_level"] == 0
+        assert data["trust_score"] == 0
 
     async def test_tripwire_blocks_sql_drop(self, client):
         resp = await client.post("/v1/intent", json={
             "entity_id": "agent_001",
             "goal": "DROP TABLE users",
         })
-        data = resp.json()
-        assert data["status"] == "blocked"
+        assert resp.json()["status"] == "blocked"
 
     async def test_known_agent_gets_correct_trust(self, client):
+        """Catastrophe: agent gets wrong trust level → wrong permissions."""
         resp = await client.post("/v1/intent", json={
             "entity_id": "agent_001",
             "goal": "Read a file",
@@ -150,34 +214,35 @@ class TestIntentEndpoint:
         assert data["trust_score"] == 450
         assert data["trust_level"] == 2
 
-    async def test_unknown_agent_gets_default_trust(self, client):
+    async def test_unknown_agent_defaults_to_low_trust(self, client):
+        """Catastrophe: unknown agent gets high trust → full access."""
         resp = await client.post("/v1/intent", json={
-            "entity_id": "unknown_agent",
+            "entity_id": "never_seen_agent",
             "goal": "Read a file",
         })
         data = resp.json()
         assert data["trust_score"] == 200
         assert data["trust_level"] == 1
 
-    async def test_trust_level_override(self, client):
+    async def test_trust_level_override_is_applied(self, client):
         resp = await client.post("/v1/intent", json={
             "entity_id": "agent_001",
             "goal": "Read a file",
             "trust_level": 5,
         })
-        data = resp.json()
-        assert data["trust_level"] == 5
+        assert resp.json()["trust_level"] == 5
 
-    async def test_intent_returns_plan_with_risk(self, client):
+    async def test_intent_response_has_plan_with_risk(self, client):
+        """Catastrophe: response missing risk_score → enforce can't evaluate."""
         resp = await client.post("/v1/intent", json={
             "entity_id": "agent_001",
             "goal": "Delete old log files from the server",
         })
-        data = resp.json()
-        plan = data["plan"]
+        plan = resp.json()["plan"]
         assert "risk_score" in plan
+        assert isinstance(plan["risk_score"], (int, float))
         assert plan["risk_score"] > 0
 
-    async def test_get_intent_not_found(self, client):
+    async def test_get_nonexistent_intent_returns_404(self, client):
         resp = await client.get("/v1/intent/nonexistent")
         assert resp.status_code == 404

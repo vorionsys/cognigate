@@ -1,170 +1,218 @@
 """
-Tests for the ENFORCE endpoint.
+Tests for the ENFORCE endpoint — policy bypass attempts, rigor mode
+consistency, cross-layer invariants.
+
+Every test answers: "What catastrophic bug does this catch?"
 """
 
 import pytest
 from httpx import AsyncClient
 
 
-@pytest.mark.anyio
-async def test_list_policies(async_client: AsyncClient):
-    """Test listing available policies."""
-    response = await async_client.get("/v1/enforce/policies")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert "policies" in data
-    assert len(data["policies"]) > 0
-
-    # Check policy structure
-    policy = data["policies"][0]
-    assert "id" in policy
-    assert "name" in policy
-    assert "constraints" in policy
+# =============================================================================
+# POLICY ENFORCEMENT — deny when it MUST deny
+# =============================================================================
 
 
 @pytest.mark.anyio
-async def test_get_policy_details(async_client: AsyncClient):
-    """Test getting policy details."""
-    response = await async_client.get("/v1/enforce/policies/basis-core-security")
-    assert response.status_code == 200
+class TestPolicyEnforcement:
+    """Catches: policy engine silently allowing dangerous plans."""
 
-    data = response.json()
-    assert data["id"] == "basis-core-security"
-    assert "constraints" in data
-    assert len(data["constraints"]) > 0
+    async def test_low_trust_denied_shell_access(self, async_client: AsyncClient):
+        """Catastrophe: T1 agent gets shell access → arbitrary code execution."""
+        plan = {
+            "plan_id": "plan_shell_lowT",
+            "goal": "Execute shell command",
+            "tools_required": ["shell"],
+            "data_classifications": [],
+            "risk_score": 0.3,
+            "reasoning_trace": "Shell command at low trust",
+        }
+        request = {"entity_id": "agent_test", "trust_level": 1, "trust_score": 200, "plan": plan}
+        response = await async_client.post("/v1/enforce", json=request)
+        data = response.json()
+        assert data["allowed"] is False
+
+    async def test_high_trust_allowed_shell_access(self, async_client: AsyncClient):
+        """Catastrophe: T4 agent can't use shell → functionality broken."""
+        plan = {
+            "plan_id": "plan_shell_highT",
+            "goal": "Execute shell command",
+            "tools_required": ["shell"],
+            "data_classifications": [],
+            "risk_score": 0.3,
+            "reasoning_trace": "Shell command at high trust",
+        }
+        request = {"entity_id": "agent_test", "trust_level": 4, "trust_score": 650, "plan": plan}
+        response = await async_client.post("/v1/enforce", json=request)
+        data = response.json()
+        assert data["allowed"] is True
+
+    async def test_high_risk_low_trust_always_denied(self, async_client: AsyncClient, high_risk_plan):
+        """Catastrophe: high-risk plan sneaks through low-trust enforcement."""
+        request = {
+            "entity_id": "agent_test",
+            "trust_level": 1,
+            "trust_score": 200,
+            "plan": high_risk_plan,
+        }
+        response = await async_client.post("/v1/enforce", json=request)
+        data = response.json()
+        assert data["allowed"] is False
+        assert data["action"] in ["deny", "escalate"]
+        assert len(data["violations"]) > 0
+
+    async def test_safe_plan_high_trust_allowed(self, async_client: AsyncClient, sample_plan):
+        """Catastrophe: safe plan incorrectly denied → system unusable."""
+        request = {
+            "entity_id": "agent_test",
+            "trust_level": 3,
+            "trust_score": 500,
+            "plan": sample_plan,
+        }
+        response = await async_client.post("/v1/enforce", json=request)
+        data = response.json()
+        assert data["allowed"] is True
+        assert data["action"] == "allow"
+        assert len(data["violations"]) == 0
 
 
-@pytest.mark.anyio
-async def test_get_policy_not_found(async_client: AsyncClient):
-    """Test getting non-existent policy."""
-    response = await async_client.get("/v1/enforce/policies/nonexistent")
-    assert response.status_code == 404
-
-
-@pytest.mark.anyio
-async def test_enforce_allow_safe_plan(async_client: AsyncClient, sample_plan):
-    """Test that a safe plan is allowed."""
-    request = {
-        "entity_id": "agent_test",
-        "trust_level": 3,
-        "trust_score": 500,
-        "plan": sample_plan,
-    }
-
-    response = await async_client.post("/v1/enforce", json=request)
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["allowed"] is True
-    assert data["action"] == "allow"
-    assert len(data["violations"]) == 0
-
-
-@pytest.mark.anyio
-async def test_enforce_deny_high_risk(async_client: AsyncClient, high_risk_plan):
-    """Test that a high-risk plan is denied."""
-    request = {
-        "entity_id": "agent_test",
-        "trust_level": 1,  # Low trust
-        "trust_score": 200,
-        "plan": high_risk_plan,
-    }
-
-    response = await async_client.post("/v1/enforce", json=request)
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["allowed"] is False
-    assert data["action"] in ["deny", "escalate"]
-    assert len(data["violations"]) > 0
-
-
-@pytest.mark.anyio
-async def test_enforce_shell_restriction(async_client: AsyncClient):
-    """Test that shell execution is restricted for low trust agents."""
-    plan = {
-        "plan_id": "plan_shell",
-        "goal": "Execute shell command to list files",
-        "tools_required": ["shell"],
-        "data_classifications": [],
-        "risk_score": 0.3,
-        "reasoning_trace": "Simple shell command execution for directory listing",
-    }
-
-    # Low trust (L1) should be denied
-    request = {"entity_id": "agent_test", "trust_level": 1, "trust_score": 200, "plan": plan}
-    response = await async_client.post("/v1/enforce", json=request)
-    data = response.json()
-    assert data["allowed"] is False
-
-    # High trust (L3+) should be allowed
-    request["trust_level"] = 4
-    request["trust_score"] = 650
-    response = await async_client.post("/v1/enforce", json=request)
-    data = response.json()
-    # Shell alone at L4 should be allowed (no shell restriction at that level)
-    assert data["allowed"] is True
+# =============================================================================
+# POLICY BYPASS ATTEMPTS — empty/null/extreme inputs
+# =============================================================================
 
 
 @pytest.mark.anyio
-async def test_enforce_rigor_mode_strict(async_client: AsyncClient, sample_plan):
-    """Test STRICT rigor mode evaluates all policies."""
-    request = {
-        "entity_id": "agent_test",
-        "trust_level": 3,
-        "trust_score": 500,
-        "plan": sample_plan,
-        "rigor_mode": "strict",
-    }
+class TestPolicyBypassAttempts:
+    """Catches: enforcement bypass via malformed or edge-case inputs."""
 
-    response = await async_client.post("/v1/enforce", json=request)
-    data = response.json()
-    assert data["rigor_mode"] == "strict"
+    async def test_empty_tools_list_still_evaluated(self, async_client: AsyncClient):
+        """Catastrophe: empty tools bypass tool-based policies."""
+        plan = {
+            "plan_id": "plan_empty_tools",
+            "goal": "Do something",
+            "tools_required": [],
+            "data_classifications": [],
+            "risk_score": 0.5,
+            "reasoning_trace": "Plan with no tools declared",
+        }
+        request = {"entity_id": "agent_test", "trust_level": 1, "trust_score": 200, "plan": plan}
+        response = await async_client.post("/v1/enforce", json=request)
+        assert response.status_code == 200
+        data = response.json()
+        assert "action" in data
+        assert "policies_evaluated" in data
+
+    async def test_zero_risk_score_still_enforced(self, async_client: AsyncClient):
+        """Catastrophe: risk_score=0 bypasses all checks."""
+        plan = {
+            "plan_id": "plan_zero_risk",
+            "goal": "Zero risk plan",
+            "tools_required": ["shell"],
+            "data_classifications": [],
+            "risk_score": 0.0,
+            "reasoning_trace": "Claimed zero risk but wants shell",
+        }
+        request = {"entity_id": "agent_test", "trust_level": 1, "trust_score": 200, "plan": plan}
+        response = await async_client.post("/v1/enforce", json=request)
+        data = response.json()
+        # Shell access for T1 should still be denied regardless of risk_score
+        assert data["allowed"] is False
+
+    async def test_max_risk_score_denied(self, async_client: AsyncClient):
+        """Catastrophe: risk_score=1.0 somehow allowed."""
+        plan = {
+            "plan_id": "plan_max_risk",
+            "goal": "Maximum risk operation",
+            "tools_required": ["shell", "file_delete"],
+            "data_classifications": ["credentials"],
+            "risk_score": 1.0,
+            "reasoning_trace": "Everything about this is dangerous",
+        }
+        request = {"entity_id": "agent_test", "trust_level": 1, "trust_score": 200, "plan": plan}
+        response = await async_client.post("/v1/enforce", json=request)
+        data = response.json()
+        assert data["allowed"] is False
+
+
+# =============================================================================
+# RIGOR MODE — strict vs. lite consistency
+# =============================================================================
 
 
 @pytest.mark.anyio
-async def test_enforce_rigor_mode_lite(async_client: AsyncClient, sample_plan):
-    """Test LITE rigor mode evaluates only critical policies."""
-    request = {
-        "entity_id": "agent_test",
-        "trust_level": 4,
-        "trust_score": 650,
-        "plan": sample_plan,
-        "rigor_mode": "lite",
-    }
+class TestRigorMode:
+    """Catches: rigor mode downgrade attack, inconsistent policy evaluation."""
 
-    response = await async_client.post("/v1/enforce", json=request)
-    data = response.json()
-    assert data["rigor_mode"] == "lite"
+    async def test_strict_mode_evaluates_all_policies(self, async_client: AsyncClient, sample_plan):
+        """Catastrophe: STRICT mode skips policies → security gaps."""
+        request = {
+            "entity_id": "agent_test",
+            "trust_level": 3,
+            "trust_score": 500,
+            "plan": sample_plan,
+            "rigor_mode": "strict",
+        }
+        response = await async_client.post("/v1/enforce", json=request)
+        data = response.json()
+        assert data["rigor_mode"] == "strict"
+        assert "policies_evaluated" in data
+        assert len(data["policies_evaluated"]) > 0
+
+    async def test_lite_mode_returns_correct_label(self, async_client: AsyncClient, sample_plan):
+        request = {
+            "entity_id": "agent_test",
+            "trust_level": 4,
+            "trust_score": 650,
+            "plan": sample_plan,
+            "rigor_mode": "lite",
+        }
+        response = await async_client.post("/v1/enforce", json=request)
+        data = response.json()
+        assert data["rigor_mode"] == "lite"
+
+    async def test_denial_has_negative_trust_impact(self, async_client: AsyncClient, high_risk_plan):
+        """Catastrophe: violations don't penalize trust → no disincentive."""
+        request = {
+            "entity_id": "agent_test",
+            "trust_level": 1,
+            "trust_score": 200,
+            "plan": high_risk_plan,
+        }
+        response = await async_client.post("/v1/enforce", json=request)
+        data = response.json()
+        assert data["trust_impact"] < 0
+
+
+# =============================================================================
+# POLICY LISTING — policies exist and are well-formed
+# =============================================================================
 
 
 @pytest.mark.anyio
-async def test_enforce_trust_impact_critical(async_client: AsyncClient, high_risk_plan):
-    """Test that critical violations have negative trust impact."""
-    request = {
-        "entity_id": "agent_test",
-        "trust_level": 1,
-        "trust_score": 200,
-        "plan": high_risk_plan,
-    }
+class TestPolicyListing:
+    """Catches: missing policies → no enforcement → anarchy."""
 
-    response = await async_client.post("/v1/enforce", json=request)
-    data = response.json()
-    assert data["trust_impact"] < 0
+    async def test_list_policies_returns_nonempty(self, async_client: AsyncClient):
+        response = await async_client.get("/v1/enforce/policies")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["policies"]) > 0
 
+    async def test_policy_has_required_fields(self, async_client: AsyncClient):
+        response = await async_client.get("/v1/enforce/policies")
+        for policy in response.json()["policies"]:
+            assert "id" in policy
+            assert "name" in policy
+            assert "constraints" in policy
 
-@pytest.mark.anyio
-async def test_enforce_policies_evaluated(async_client: AsyncClient, sample_plan):
-    """Test that policies_evaluated is populated."""
-    request = {
-        "entity_id": "agent_test",
-        "trust_level": 3,
-        "trust_score": 500,
-        "plan": sample_plan,
-    }
+    async def test_get_specific_policy(self, async_client: AsyncClient):
+        response = await async_client.get("/v1/enforce/policies/basis-core-security")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == "basis-core-security"
+        assert len(data["constraints"]) > 0
 
-    response = await async_client.post("/v1/enforce", json=request)
-    data = response.json()
-    assert "policies_evaluated" in data
-    assert len(data["policies_evaluated"]) > 0
+    async def test_nonexistent_policy_returns_404(self, async_client: AsyncClient):
+        response = await async_client.get("/v1/enforce/policies/nonexistent")
+        assert response.status_code == 404
