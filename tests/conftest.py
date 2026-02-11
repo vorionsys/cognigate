@@ -58,16 +58,11 @@ def sample_plan():
     """Create a sample structured plan for testing."""
     return {
         "plan_id": "plan_test123",
-        "intent_id": "int_test123",
-        "entity_id": "agent_test",
-        "primary_action": "read_file",
-        "steps": [
-            {"action": "read_file", "target": "/tmp/test.txt"}
-        ],
+        "goal": "Read a test file from /tmp/test.txt",
         "tools_required": ["file_read"],
         "data_classifications": [],
         "risk_score": 0.2,
-        "estimated_duration": "5m",
+        "reasoning_trace": "Simple file read operation with no sensitive data",
     }
 
 
@@ -76,14 +71,9 @@ def high_risk_plan():
     """Create a high-risk plan for testing."""
     return {
         "plan_id": "plan_highrisk",
-        "intent_id": "int_highrisk",
-        "entity_id": "agent_test",
-        "primary_action": "shell_exec",
-        "steps": [
-            {"action": "shell_exec", "command": "rm -rf /tmp/test"}
-        ],
+        "goal": "Execute shell command to delete files in /tmp/test",
         "tools_required": ["shell", "file_delete"],
         "data_classifications": ["pii_email"],
         "risk_score": 0.9,
-        "estimated_duration": "1m",
+        "reasoning_trace": "Destructive shell operation involving PII data",
     }

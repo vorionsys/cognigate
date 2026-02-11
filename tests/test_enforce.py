@@ -48,6 +48,7 @@ async def test_enforce_allow_safe_plan(async_client: AsyncClient, sample_plan):
     request = {
         "entity_id": "agent_test",
         "trust_level": 3,
+        "trust_score": 500,
         "plan": sample_plan,
     }
 
@@ -66,6 +67,7 @@ async def test_enforce_deny_high_risk(async_client: AsyncClient, high_risk_plan)
     request = {
         "entity_id": "agent_test",
         "trust_level": 1,  # Low trust
+        "trust_score": 200,
         "plan": high_risk_plan,
     }
 
@@ -83,24 +85,22 @@ async def test_enforce_shell_restriction(async_client: AsyncClient):
     """Test that shell execution is restricted for low trust agents."""
     plan = {
         "plan_id": "plan_shell",
-        "intent_id": "int_shell",
-        "entity_id": "agent_test",
-        "primary_action": "shell_exec",
-        "steps": [{"action": "shell_exec", "command": "ls"}],
+        "goal": "Execute shell command to list files",
         "tools_required": ["shell"],
         "data_classifications": [],
         "risk_score": 0.3,
-        "estimated_duration": "1m",
+        "reasoning_trace": "Simple shell command execution for directory listing",
     }
 
     # Low trust (L1) should be denied
-    request = {"entity_id": "agent_test", "trust_level": 1, "plan": plan}
+    request = {"entity_id": "agent_test", "trust_level": 1, "trust_score": 200, "plan": plan}
     response = await async_client.post("/v1/enforce", json=request)
     data = response.json()
     assert data["allowed"] is False
 
     # High trust (L3+) should be allowed
     request["trust_level"] = 4
+    request["trust_score"] = 650
     response = await async_client.post("/v1/enforce", json=request)
     data = response.json()
     # Shell alone at L4 should be allowed (no shell restriction at that level)
@@ -113,6 +113,7 @@ async def test_enforce_rigor_mode_strict(async_client: AsyncClient, sample_plan)
     request = {
         "entity_id": "agent_test",
         "trust_level": 3,
+        "trust_score": 500,
         "plan": sample_plan,
         "rigor_mode": "strict",
     }
@@ -128,6 +129,7 @@ async def test_enforce_rigor_mode_lite(async_client: AsyncClient, sample_plan):
     request = {
         "entity_id": "agent_test",
         "trust_level": 4,
+        "trust_score": 650,
         "plan": sample_plan,
         "rigor_mode": "lite",
     }
@@ -143,6 +145,7 @@ async def test_enforce_trust_impact_critical(async_client: AsyncClient, high_ris
     request = {
         "entity_id": "agent_test",
         "trust_level": 1,
+        "trust_score": 200,
         "plan": high_risk_plan,
     }
 
@@ -157,6 +160,7 @@ async def test_enforce_policies_evaluated(async_client: AsyncClient, sample_plan
     request = {
         "entity_id": "agent_test",
         "trust_level": 3,
+        "trust_score": 500,
         "plan": sample_plan,
     }
 

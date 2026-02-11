@@ -247,7 +247,7 @@ async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
         risk_score=request.plan.risk_score,
         tools_required=request.plan.tools_required,
         data_classifications=request.plan.data_classifications,
-        estimated_duration=request.plan.estimated_duration,
+        estimated_duration=getattr(request.plan, 'estimated_duration', None),
         metadata={
             "plan_id": request.plan.plan_id,
             "entity_id": request.entity_id,

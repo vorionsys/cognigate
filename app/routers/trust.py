@@ -115,6 +115,22 @@ async def admit_agent(body: AdmitRequest) -> dict:
     }
 
 
+@router.get("/trust/tiers", summary="Get tier definitions", include_in_schema=True)
+async def get_tiers() -> dict:
+    """
+    Get all trust tier definitions (delegates to reference/tiers).
+    """
+    tiers = []
+    for tier_enum in TrustTier:
+        threshold = TIER_THRESHOLDS[tier_enum]
+        tiers.append({
+            "tier": tier_enum.value,
+            "code": f"T{tier_enum.value}",
+            **threshold,
+        })
+    return {"tiers": tiers}
+
+
 @router.get("/trust/{agent_id}", summary="Get current trust status")
 async def get_trust(agent_id: str) -> dict:
     """
@@ -230,19 +246,3 @@ async def get_trust_history(agent_id: str, limit: int = 50) -> dict:
         "count": len(recent),
         "signals": list(reversed(recent)),
     }
-
-
-@router.get("/trust/tiers", summary="Get tier definitions", include_in_schema=True)
-async def get_tiers() -> dict:
-    """
-    Get all trust tier definitions (delegates to reference/tiers).
-    """
-    tiers = []
-    for tier_enum in TrustTier:
-        threshold = TIER_THRESHOLDS[tier_enum]
-        tiers.append({
-            "tier": tier_enum.value,
-            "code": f"T{tier_enum.value}",
-            **threshold,
-        })
-    return {"tiers": tiers}

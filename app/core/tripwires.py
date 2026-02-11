@@ -107,7 +107,7 @@ FORBIDDEN_PATTERNS = {
 
     # === NETWORK ATTACKS ===
     "reverse_shell_bash": {
-        "pattern": r"bash\s+-[ic]\s+[\"'].*(/dev/tcp/|nc\s+-[el]|ncat)",
+        "pattern": r"bash\s+-[ic]\s+[\"']?.*(/dev/tcp/|nc\s+-[el]|ncat)",
         "message": "Reverse shell pattern detected",
         "severity": "critical",
     },

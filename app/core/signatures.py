@@ -82,8 +82,7 @@ class SignatureManager:
             self._initialized = True
 
             logger.warning(
-                "signatures_dev_mode",
-                extra={"message": "Generated ephemeral key pair - not for production"}
+                "signatures_dev_mode: Generated ephemeral key pair - not for production"
             )
             return True
         except Exception as e:
