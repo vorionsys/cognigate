@@ -103,3 +103,34 @@ class TestReadinessCheck:
     async def test_ready_returns_ready(self, client):
         data = (await client.get("/ready")).json()
         assert data["status"] == "ready"
+
+
+@pytest.mark.asyncio
+class TestAppRoutes:
+    """Test app-level routes defined in main.py."""
+
+    async def test_root_landing_page(self, client):
+        resp = await client.get("/")
+        assert resp.status_code == 200
+        assert "Cognigate" in resp.text
+
+    async def test_robots_txt(self, client):
+        resp = await client.get("/robots.txt")
+        assert resp.status_code == 200
+        assert "User-agent" in resp.text
+
+    async def test_sitemap_xml(self, client):
+        resp = await client.get("/sitemap.xml")
+        assert resp.status_code == 200
+        assert "urlset" in resp.text
+
+    async def test_openapi_json(self, client):
+        resp = await client.get("/openapi.json")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "openapi" in data
+        assert "paths" in data
+
+    async def test_status_page(self, client):
+        resp = await client.get("/status")
+        assert resp.status_code == 200

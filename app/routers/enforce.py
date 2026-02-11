@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.models.enforce import EnforceRequest, EnforceResponse, PolicyViolation, RigorMode
 from app.core.velocity import check_velocity, record_action
-from app.core.circuit_breaker import circuit_breaker, CircuitState
+from app.core.circuit_breaker import circuit_breaker
 from app.core.cache import cache_manager
 from app.core.async_logger import async_log_queue
 from app.core.policy_engine import policy_engine, EvaluationContext

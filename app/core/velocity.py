@@ -267,7 +267,6 @@ class VelocityTracker:
         """Get velocity statistics for an entity."""
         async with self._lock:
             state = self._get_state(entity_id)
-            now = time.time()
 
             return {
                 "entity_id": entity_id,

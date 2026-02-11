@@ -10,7 +10,6 @@ All admin endpoints require the X-Admin-Key header for authentication.
 import structlog
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
 
 from app.core.velocity import velocity_tracker, get_velocity_stats
 from app.core.circuit_breaker import circuit_breaker, CircuitState
@@ -183,7 +182,7 @@ async def get_all_velocity_stats(
     Get velocity statistics for all entities.
     """
     return {
-        "entities": velocity_tracker.get_all_stats(),
+        "entities": await velocity_tracker.get_all_stats(),
     }
 
 
@@ -195,7 +194,7 @@ async def get_entity_velocity(
     """
     Get velocity statistics for a specific entity.
     """
-    stats = get_velocity_stats(entity_id)
+    stats = await get_velocity_stats(entity_id)
     if stats["total_actions"] == 0:
         raise HTTPException(status_code=404, detail=f"No velocity data for entity {entity_id}")
     return stats
@@ -217,7 +216,7 @@ async def throttle_entity(
     This will block the entity for the specified duration,
     regardless of their actual velocity.
     """
-    velocity_tracker.throttle_entity(request.entity_id, request.duration_seconds)
+    await velocity_tracker.throttle_entity(request.entity_id, request.duration_seconds)
     logger.warning(
         "admin_throttle",
         entity_id=request.entity_id,
@@ -238,7 +237,7 @@ async def unthrottle_entity(
     """
     Remove throttle from an entity.
     """
-    velocity_tracker.unthrottle_entity(request.entity_id)
+    await velocity_tracker.unthrottle_entity(request.entity_id)
     logger.info("admin_unthrottle", entity_id=request.entity_id)
     return {
         "status": "unthrottled",

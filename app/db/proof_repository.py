@@ -271,7 +271,7 @@ class ProofRepository:
 
         # Check first record links to genesis
         if records[0].previous_hash != GENESIS_HASH:
-            issues.append(f"First record does not link to genesis hash")
+            issues.append("First record does not link to genesis hash")
 
         # Check each record links to previous
         for i in range(1, len(records)):

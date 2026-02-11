@@ -20,7 +20,7 @@ Circuit states:
 
 import time
 import structlog
-from typing import Optional, Callable
+from typing import Optional
 from dataclasses import dataclass, field
 from collections import defaultdict
 from threading import Lock

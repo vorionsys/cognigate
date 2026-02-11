@@ -909,9 +909,8 @@ async def vote_for_theme(req: ThemeVoteRequest):
 async def get_theme_votes():
     """Get current vote counts and recent voters for all themes."""
     from app.theme import THEMES
-    from app.core.votes import get_vote_counts, get_all_votes
+    from app.core.votes import get_all_votes
 
-    counts = get_vote_counts()
     all_votes = get_all_votes()
     total = len(all_votes)
 
@@ -942,7 +941,7 @@ async def get_theme_votes():
 @router.get("/tools/themes", response_class=HTMLResponse, include_in_schema=False)
 async def theme_preview():
     """Preview all 4 unified themes side-by-side with live voting."""
-    from app.theme import THEMES, ACTIVE_THEME, theme_to_css_vars
+    from app.theme import THEMES, ACTIVE_THEME
     from app.core.votes import get_vote_counts
 
     counts = get_vote_counts()

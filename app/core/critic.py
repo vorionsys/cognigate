@@ -18,7 +18,7 @@ Supports multiple AI providers:
 import time
 import json
 import structlog
-from typing import Optional, Any
+from typing import Optional
 from abc import ABC, abstractmethod
 
 from app.config import get_settings

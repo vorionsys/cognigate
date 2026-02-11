@@ -12,7 +12,7 @@ Ed25519 is chosen for:
 import base64
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 from app.config import get_settings
 

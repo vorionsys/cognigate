@@ -10,9 +10,7 @@ of all governance decisions for audit and compliance.
 import hashlib
 import json
 import structlog
-from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.proof import ProofRecord, ProofQuery, ProofVerification, ProofStats
