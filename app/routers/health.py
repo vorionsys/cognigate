@@ -1,6 +1,15 @@
 """
 Health check endpoints.
+
+Provides:
+- /health      — Full health check with subsystem status
+- /health/live — Lightweight liveness probe (k8s/serverless)
+- /ready       — Readiness check
+- /status      — Public status dashboard (HTML)
 """
+
+import time
+from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
@@ -9,25 +18,136 @@ from datetime import datetime
 
 router = APIRouter()
 
+# Track process start time for uptime reporting
+_start_time = time.monotonic()
+
+
+class SubsystemStatus(BaseModel):
+    name: str
+    status: str  # "ok", "degraded", "unavailable"
+    latency_ms: Optional[float] = None
+    detail: Optional[str] = None
+
 
 class HealthResponse(BaseModel):
     status: str
     service: str
     version: str
     timestamp: datetime
+    uptime_seconds: float
+    subsystems: list[SubsystemStatus]
+
+
+async def _check_database() -> SubsystemStatus:
+    """Check database connectivity."""
+    from app.db.database import _engine
+    if _engine is None:
+        return SubsystemStatus(
+            name="database",
+            status="unavailable",
+            detail="Engine not initialized",
+        )
+    try:
+        t0 = time.monotonic()
+        async with _engine.connect() as conn:
+            await conn.execute(
+                __import__("sqlalchemy").text("SELECT 1")
+            )
+        latency = (time.monotonic() - t0) * 1000
+        return SubsystemStatus(
+            name="database",
+            status="ok",
+            latency_ms=round(latency, 2),
+        )
+    except Exception as e:
+        return SubsystemStatus(
+            name="database",
+            status="degraded",
+            detail=str(e)[:120],
+        )
+
+
+async def _check_cache() -> SubsystemStatus:
+    """Check Redis cache connectivity."""
+    from app.core.cache import cache_manager
+    if not cache_manager.is_connected:
+        return SubsystemStatus(
+            name="cache",
+            status="unavailable",
+            detail="Not connected (graceful degradation active)",
+        )
+    try:
+        t0 = time.monotonic()
+        await cache_manager._redis.ping()
+        latency = (time.monotonic() - t0) * 1000
+        return SubsystemStatus(
+            name="cache",
+            status="ok",
+            latency_ms=round(latency, 2),
+        )
+    except Exception as e:
+        return SubsystemStatus(
+            name="cache",
+            status="degraded",
+            detail=str(e)[:120],
+        )
+
+
+def _check_signatures() -> SubsystemStatus:
+    """Check signature subsystem."""
+    from app.core.signatures import signature_manager
+    if signature_manager._private_key is not None:
+        return SubsystemStatus(name="signatures", status="ok")
+    return SubsystemStatus(
+        name="signatures",
+        status="unavailable",
+        detail="Keys not loaded",
+    )
 
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     """
-    Check if the Cognigate Engine is healthy.
+    Full health check with subsystem status.
+
+    Returns overall status plus individual status for:
+    - database (PostgreSQL/SQLite)
+    - cache (Redis)
+    - signatures (Ed25519 key pair)
     """
+    db_status = await _check_database()
+    cache_status = await _check_cache()
+    sig_status = _check_signatures()
+
+    subsystems = [db_status, cache_status, sig_status]
+
+    # Overall status: healthy if db is ok, degraded if db is degraded, unhealthy otherwise
+    if all(s.status == "ok" for s in subsystems):
+        overall = "healthy"
+    elif db_status.status == "ok":
+        overall = "degraded"
+    else:
+        overall = "unhealthy"
+
     return HealthResponse(
-        status="healthy",
+        status=overall,
         service="cognigate-engine",
         version="0.1.0",
         timestamp=datetime.utcnow(),
+        uptime_seconds=round(time.monotonic() - _start_time, 2),
+        subsystems=subsystems,
     )
+
+
+@router.get("/health/live")
+async def liveness_check() -> dict[str, str]:
+    """
+    Lightweight liveness probe.
+
+    Returns 200 if the process is alive. No dependency checks.
+    Used by Kubernetes liveness probes and serverless health checks.
+    """
+    return {"status": "alive"}
 
 
 @router.get("/ready")

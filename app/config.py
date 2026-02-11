@@ -6,9 +6,16 @@ import os
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Auto-detect Vercel serverless (read-only filesystem, use /tmp)
+# Auto-detect Vercel serverless environment
 _IS_VERCEL = bool(os.environ.get("VERCEL"))
-_DEFAULT_DB_URL = "sqlite+aiosqlite:////tmp/cognigate.db" if _IS_VERCEL else "sqlite+aiosqlite:///./cognigate.db"
+
+# Production: Use DATABASE_URL env var (Neon PostgreSQL) if set.
+# Development: Fall back to local SQLite.
+# Vercel: Previously used ephemeral /tmp SQLite — now requires DATABASE_URL for persistence.
+_DEFAULT_DB_URL = (
+    os.environ.get("DATABASE_URL")
+    or ("sqlite+aiosqlite:////tmp/cognigate.db" if _IS_VERCEL else "sqlite+aiosqlite:///./cognigate.db")
+)
 
 
 class Settings(BaseSettings):

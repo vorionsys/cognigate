@@ -1,7 +1,10 @@
 """
 Database connection and session management for Cognigate.
 
-Uses SQLAlchemy async with SQLite by default (configurable).
+Supports PostgreSQL (Neon) for production and SQLite for local development.
+The driver is selected automatically based on DATABASE_URL:
+  - postgresql+asyncpg://... → Neon PostgreSQL (production, persistent)
+  - sqlite+aiosqlite://...   → SQLite (local dev)
 """
 
 import logging
@@ -13,6 +16,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
 
@@ -29,6 +33,20 @@ _engine = None
 _session_factory = None
 
 
+def _resolve_database_url(url: str) -> str:
+    """
+    Resolve the database URL to the correct async driver format.
+
+    Neon/Supabase often provide postgres:// or postgresql:// URLs.
+    SQLAlchemy async requires postgresql+asyncpg:// for PostgreSQL.
+    """
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
 async def init_db() -> None:
     """
     Initialize the database connection and create tables.
@@ -38,12 +56,19 @@ async def init_db() -> None:
     global _engine, _session_factory
 
     settings = get_settings()
+    db_url = _resolve_database_url(settings.database_url)
+    is_postgres = "postgresql" in db_url or "asyncpg" in db_url
 
-    _engine = create_async_engine(
-        settings.database_url,
-        echo=settings.debug,
-        future=True,
-    )
+    # PostgreSQL (Neon serverless): use NullPool for serverless compatibility.
+    # SQLite: default pool is fine for local dev.
+    engine_kwargs = {
+        "echo": settings.debug,
+        "future": True,
+    }
+    if is_postgres:
+        engine_kwargs["poolclass"] = NullPool
+
+    _engine = create_async_engine(db_url, **engine_kwargs)
 
     _session_factory = async_sessionmaker(
         _engine,
@@ -55,9 +80,10 @@ async def init_db() -> None:
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    db_type = "postgresql (Neon)" if is_postgres else "sqlite"
     logger.info(
         "database_initialized",
-        extra={"database_url": settings.database_url}
+        extra={"database_type": db_type}
     )
 
 
