@@ -116,6 +116,11 @@ FORBIDDEN_PATTERNS = {
         "message": "Netcat shell pipe detected",
         "severity": "critical",
     },
+    "netcat_exec_shell": {
+        "pattern": r"nc\s+(-[elnvp]*\s+)*-e\s+/bin/(ba)?sh",
+        "message": "Netcat exec shell detected",
+        "severity": "critical",
+    },
 
     # === CREDENTIAL THEFT ===
     "cat_shadow": {
@@ -182,10 +187,13 @@ def check_tripwires(prompt: str) -> TripwireResult:
     Returns:
         TripwireResult with triggered=True if any pattern matches
     """
+    # Strip null bytes and zero-width characters that could evade pattern matching
+    sanitized = prompt.replace("\x00", "").replace("\u200b", "").replace("\u200c", "").replace("\u200d", "").replace("\ufeff", "")
+
     for name, config in FORBIDDEN_PATTERNS.items():
         pattern = config["pattern"]
-        if re.search(pattern, prompt, re.IGNORECASE):
-            match = re.search(pattern, prompt, re.IGNORECASE)
+        if re.search(pattern, sanitized, re.IGNORECASE):
+            match = re.search(pattern, sanitized, re.IGNORECASE)
             return TripwireResult(
                 triggered=True,
                 pattern_name=name,

