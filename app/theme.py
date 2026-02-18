@@ -50,6 +50,7 @@ THEMES = {
         "warning": "#f97316",
         "info": "#3b82f6",
         "layer_basis": "#fbbf24",
+        "layer_car": "#f97316",
         "layer_intent": "#60a5fa",
         "layer_enforce": "#818cf8",
         "layer_proof": "#34d399",
@@ -92,6 +93,7 @@ THEMES = {
         "warning": "#f97316",
         "info": "#3b82f6",
         "layer_basis": "#fbbf24",
+        "layer_car": "#f97316",
         "layer_intent": "#60a5fa",
         "layer_enforce": "#818cf8",
         "layer_proof": "#34d399",
@@ -134,6 +136,7 @@ THEMES = {
         "warning": "#f97316",
         "info": "#3b82f6",
         "layer_basis": "#fbbf24",
+        "layer_car": "#f97316",
         "layer_intent": "#60a5fa",
         "layer_enforce": "#818cf8",
         "layer_proof": "#34d399",
@@ -176,6 +179,7 @@ THEMES = {
         "warning": "#f97316",
         "info": "#3b82f6",
         "layer_basis": "#fbbf24",
+        "layer_car": "#f97316",
         "layer_intent": "#60a5fa",
         "layer_enforce": "#818cf8",
         "layer_proof": "#34d399",
@@ -223,6 +227,7 @@ def theme_to_css_vars(theme_id: str = None) -> str:
     --warning: {t['warning']};
     --info: {t['info']};
     --layer-basis: {t['layer_basis']};
+    --layer-car: {t['layer_car']};
     --layer-intent: {t['layer_intent']};
     --layer-enforce: {t['layer_enforce']};
     --layer-proof: {t['layer_proof']};

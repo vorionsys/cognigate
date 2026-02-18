@@ -1,7 +1,7 @@
 """
 Cognigate Engine - Main FastAPI Application
 
-The operational engine that enforces the BASIS standard for AI agent governance.
+The open-source enforcement engine for the BASIS standard.
 """
 
 from contextlib import asynccontextmanager
@@ -102,7 +102,7 @@ app = FastAPI(
     description="""
 ## Cognigate Engine
 
-The operational engine that enforces the **BASIS** standard for AI agent governance.
+The open-source **enforcement engine** for the BASIS standard. Stateless policy enforcement and cryptographic audit trails for AI agents.
 
 ### Core Endpoints
 
@@ -143,6 +143,7 @@ The operational engine that enforces the **BASIS** standard for AI agent governa
 
 ```
 BASIS sets the rules.
+CAR identifies the agent.
 INTENT figures out the goal.
 ENFORCE stops the bad stuff.
 PROOF shows the receipts.
@@ -212,8 +213,8 @@ async def root() -> str:
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Cognigate — The Open Governance Engine</title>
-<meta name="description" content="The open-source enforcement engine for the BASIS standard. Trust scoring, capability gating, and cryptographic audit trails for AI agents." />
+<title>Cognigate — The Open Enforcement Engine</title>
+<meta name="description" content="The open-source enforcement engine for the BASIS standard. Stateless policy enforcement and cryptographic audit trails for AI agents." />
 <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
 <link rel="icon" href="/static/favicon.png" type="image/png" sizes="32x32" />
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
@@ -290,7 +291,7 @@ a:hover {{ text-decoration: underline; }}
 }}
 
 .pipe {{
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;
 }}
 @media (max-width: 700px) {{ .pipe {{ grid-template-columns: 1fr 1fr; }} }}
 .pipe-item {{
@@ -303,9 +304,10 @@ a:hover {{ text-decoration: underline; }}
     text-transform: uppercase; margin-bottom: 0.5rem;
 }}
 .pipe-item:nth-child(1) .pipe-label {{ color: var(--layer-basis); }}
-.pipe-item:nth-child(2) .pipe-label {{ color: var(--layer-intent); }}
-.pipe-item:nth-child(3) .pipe-label {{ color: var(--layer-enforce); }}
-.pipe-item:nth-child(4) .pipe-label {{ color: var(--layer-proof); }}
+.pipe-item:nth-child(2) .pipe-label {{ color: var(--layer-car); }}
+.pipe-item:nth-child(3) .pipe-label {{ color: var(--layer-intent); }}
+.pipe-item:nth-child(4) .pipe-label {{ color: var(--layer-enforce); }}
+.pipe-item:nth-child(5) .pipe-label {{ color: var(--layer-proof); }}
 .pipe-name {{ font-size: 1.3rem; font-weight: 700; color: var(--text-heading); margin-bottom: 0.5rem; }}
 .pipe-desc {{ font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; }}
 
@@ -387,9 +389,9 @@ footer a:hover {{ color: var(--accent); }}
 
 <section class="hero">
     <div class="badge">Open Source &middot; Apache 2.0</div>
-    <h1>The <span>Governance Engine</span> for Autonomous AI</h1>
+    <h1>The Open <span>Enforcement Engine</span></h1>
     <p class="subtitle">
-        Cognigate enforces the BASIS standard. Trust scoring, capability gating, policy enforcement, and cryptographic audit trails &mdash; all through a single API.
+        Cognigate is the stateless runtime that executes the BASIS governance pipeline. Every agent action passes through INTENT, ENFORCE, and PROOF before it touches the world. Open source. Embeddable. No opinions &mdash; just enforcement.
     </p>
     <div class="cta-row">
         <a href="/docs" class="cta cta-primary">Explore the API &rarr;</a>
@@ -400,7 +402,7 @@ footer a:hover {{ color: var(--accent); }}
 
 <section class="stack">
     <h2>The Stack</h2>
-    <p class="stack-sub">Four layers. One pipeline. Every action governed.</p>
+    <p class="stack-sub">Five stages. One pipeline. Every action governed.</p>
     <div class="pipe">
         <div class="pipe-item">
             <div class="pipe-label">Standard</div>
@@ -408,19 +410,24 @@ footer a:hover {{ color: var(--accent); }}
             <div class="pipe-desc">The governance rules. What agents can and cannot do, before reasoning begins.</div>
         </div>
         <div class="pipe-item">
+            <div class="pipe-label">Identity</div>
+            <div class="pipe-name">CAR</div>
+            <div class="pipe-desc">Categorical Agentic Registry. Resolves the agent's identity, trust score, and capability credentials before the pipeline runs.</div>
+        </div>
+        <div class="pipe-item">
             <div class="pipe-label">Reasoning</div>
             <div class="pipe-name">INTENT</div>
-            <div class="pipe-desc">Parses agent goals into structured plans. Surfaces risk without executing.</div>
+            <div class="pipe-desc">Parses agent goals into structured plans. Surfaces risk and constraint pressure without executing actions.</div>
         </div>
         <div class="pipe-item">
             <div class="pipe-label">Enforcement</div>
             <div class="pipe-name">ENFORCE</div>
-            <div class="pipe-desc">Validates plans against BASIS policies. Gates execution. Escalates when needed.</div>
+            <div class="pipe-desc">Validates plans against BASIS policies using the agent's CAR-bound trust score. Gates execution. Escalates when boundaries are tested.</div>
         </div>
         <div class="pipe-item">
             <div class="pipe-label">Audit</div>
             <div class="pipe-name">PROOF</div>
-            <div class="pipe-desc">Cryptographic record of every decision. Immutable. Verifiable. The receipts.</div>
+            <div class="pipe-desc">Cryptographic record of every decision. Immutable. Verifiable. The receipts. Optional: CHAIN extension anchors proofs to blockchain for independent verification.</div>
         </div>
     </div>
 </section>
@@ -429,24 +436,20 @@ footer a:hover {{ color: var(--accent); }}
     <h2>What Cognigate Does</h2>
     <div class="feat-grid">
         <div class="feat">
-            <h3>8-Tier Trust Scoring</h3>
-            <p>Agents earn autonomy through behavior. 0&ndash;1000 scores map to 8 tiers from Sandbox to Autonomous. Higher trust unlocks more capability.</p>
-        </div>
-        <div class="feat">
-            <h3>24 Capability Gates</h3>
-            <p>Fine-grained permission model. Each capability requires a minimum trust tier. Agents can only access what they have earned.</p>
-        </div>
-        <div class="feat">
             <h3>Policy Enforcement</h3>
-            <p>Every agent action passes through ENFORCE before execution. Risk-based routing sends low-risk actions to express path, high-risk to council review.</p>
+            <p>Every agent action passes through ENFORCE before execution. Risk-based routing sends low-risk actions to the express path, high-risk to escalation or council review.</p>
+        </div>
+        <div class="feat">
+            <h3>Trust-Gated Execution</h3>
+            <p>Cognigate reads the agent's CAR-bound trust score and enforces tier-appropriate execution paths. Agents at T0 Sandbox get sandboxed execution. Agents at T7 Autonomous get express routing. Cognigate doesn't issue scores &mdash; it enforces the boundaries they define.</p>
+        </div>
+        <div class="feat">
+            <h3>Capability Gate Enforcement</h3>
+            <p>Each agent action requires specific capability credentials. Cognigate checks the agent's CAR-bound capability set against the action's requirements at runtime. If the credential is missing or the trust tier is insufficient, the action is denied or escalated.</p>
         </div>
         <div class="feat">
             <h3>Cryptographic Audit Trail</h3>
-            <p>PROOF layer logs every intent, enforcement decision, and outcome with cryptographic signatures. Tamper-evident and compliance-ready.</p>
-        </div>
-        <div class="feat">
-            <h3>Agent Lifecycle Management</h3>
-            <p>Register, admit, monitor, and revoke agents. Gate Trust admission with observation tiers. Full signal history per agent.</p>
+            <p>The PROOF layer logs every intent, enforcement decision, and outcome with cryptographic signatures. Tamper-evident and compliance-ready. Optionally anchored to blockchain via the CHAIN extension for independent verification.</p>
         </div>
         <div class="feat">
             <h3>Gateway to AgentAnchor</h3>
@@ -462,12 +465,12 @@ footer a:hover {{ color: var(--accent); }}
         <a href="/tools/calculator" class="tool-card">
             <div class="tool-icon">&#9878;</div>
             <h3>Trust Calculator</h3>
-            <p>Explore the 8-tier model</p>
+            <p>Explore the T0&ndash;T7 model</p>
         </a>
         <a href="/tools/errors" class="tool-card">
             <div class="tool-icon">&#9888;</div>
             <h3>Error Codes</h3>
-            <p>Search 38+ error codes</p>
+            <p>Search 38+ enforcement error codes</p>
         </a>
         <a href="/tools/sdks" class="tool-card">
             <div class="tool-icon">&lt;/&gt;</div>
@@ -477,7 +480,7 @@ footer a:hover {{ color: var(--accent); }}
         <a href="/tools/playground" class="tool-card">
             <div class="tool-icon">&#9654;</div>
             <h3>Playground</h3>
-            <p>Full pipeline testing</p>
+            <p>Full pipeline: BASIS &rarr; CAR &rarr; ENFORCE &rarr; PROOF</p>
         </a>
     </div>
 </section>
@@ -485,7 +488,7 @@ footer a:hover {{ color: var(--accent); }}
 <section class="open-source">
     <div class="os-box">
         <h2>Open Source. Apache 2.0.</h2>
-        <p>Cognigate is the reference implementation of the BASIS standard. Inspect it, fork it, build on it. The governance engine should be as transparent as the systems it governs.</p>
+        <p>Cognigate is the open-source enforcement engine for the BASIS standard. It executes the governance pipeline &mdash; nothing more, nothing less. Inspect it, fork it, build on it. The enforcement layer should be as transparent as the systems it governs.</p>
         <code>git clone https://github.com/voriongit/cognigate.git</code>
         <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
             <a href="https://github.com/voriongit/cognigate" class="cta cta-primary" style="font-size:0.85rem;padding:0.6rem 1.2rem;">GitHub Repository</a>
