@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     admin_api_key: str = "CHANGE_ME_IN_PRODUCTION"  # API key for admin endpoints
     api_key: str = "CHANGE_ME_IN_PRODUCTION"  # API key for pipeline endpoints
 
+    # MFA Configuration
+    mfa_enabled: bool = False  # Enable TOTP MFA for admin endpoints
+    mfa_totp_secret: str = ""  # Base32-encoded TOTP secret (generate with pyotp.random_base32())
+    mfa_totp_issuer: str = "Cognigate"
+    mfa_totp_window: int = 1  # Accept codes ±1 time step (30-second window)
+
     # Trust Engine
     default_trust_level: int = 1
     trust_decay_rate: float = 0.01

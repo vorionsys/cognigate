@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from app.core.velocity import velocity_tracker, get_velocity_stats
 from app.core.circuit_breaker import circuit_breaker, CircuitState
-from app.core.auth import verify_admin_key
+from app.core.auth import verify_admin_key_with_mfa
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -25,7 +25,7 @@ router = APIRouter()
 
 @router.get("/admin/circuit")
 async def get_circuit_status(
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Get circuit breaker status.
@@ -38,7 +38,7 @@ async def get_circuit_status(
 @router.get("/admin/circuit/history")
 async def get_circuit_history(
     limit: int = 10,
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """Get circuit breaker trip history."""
     return {
@@ -53,7 +53,7 @@ class ManualHaltRequest(BaseModel):
 @router.post("/admin/circuit/halt")
 async def manual_circuit_halt(
     request: ManualHaltRequest,
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Manually trip the circuit breaker.
@@ -72,7 +72,7 @@ async def manual_circuit_halt(
 
 @router.post("/admin/circuit/reset")
 async def manual_circuit_reset(
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Manually reset the circuit breaker.
@@ -99,7 +99,7 @@ class EntityHaltRequest(BaseModel):
 @router.post("/admin/entity/halt")
 async def halt_entity(
     request: EntityHaltRequest,
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Halt a specific entity.
@@ -126,7 +126,7 @@ class EntityUnhaltRequest(BaseModel):
 @router.post("/admin/entity/unhalt")
 async def unhalt_entity(
     request: EntityUnhaltRequest,
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Unhalt a specific entity.
@@ -149,7 +149,7 @@ class CascadeHaltRequest(BaseModel):
 @router.post("/admin/entity/cascade-halt")
 async def cascade_halt_entity(
     request: CascadeHaltRequest,
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Halt a parent entity and all its registered children.
@@ -176,7 +176,7 @@ async def cascade_halt_entity(
 
 @router.get("/admin/velocity")
 async def get_all_velocity_stats(
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Get velocity statistics for all entities.
@@ -189,7 +189,7 @@ async def get_all_velocity_stats(
 @router.get("/admin/velocity/{entity_id}")
 async def get_entity_velocity(
     entity_id: str,
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Get velocity statistics for a specific entity.
@@ -208,7 +208,7 @@ class ThrottleRequest(BaseModel):
 @router.post("/admin/velocity/throttle")
 async def throttle_entity(
     request: ThrottleRequest,
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Manually throttle an entity.
@@ -232,7 +232,7 @@ async def throttle_entity(
 @router.post("/admin/velocity/unthrottle")
 async def unthrottle_entity(
     request: EntityUnhaltRequest,
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Remove throttle from an entity.
@@ -251,7 +251,7 @@ async def unthrottle_entity(
 
 @router.get("/admin/status")
 async def get_system_status(
-    _: str = Depends(verify_admin_key),
+    _: str = Depends(verify_admin_key_with_mfa),
 ) -> dict:
     """
     Get comprehensive system status.
