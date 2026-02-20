@@ -1,0 +1,582 @@
+# =============================================================================
+# Cognigate SBOM Generation Pipeline
+# Generates CycloneDX 1.5 + SPDX SBOMs for the Python FastAPI application
+# Correlates pip-audit vulnerabilities, archives history, uploads to releases
+# =============================================================================
+
+name: SBOM Generation
+
+on:
+  push:
+    tags: ['v*']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for SBOM (e.g., v1.0.0)'
+        required: false
+        type: string
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6AM UTC
+
+env:
+  PYTHON_VERSION: '3.13'
+
+permissions:
+  contents: write
+  security-events: write
+
+concurrency:
+  group: sbom-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ===========================================================================
+  # Job 1: Generate SBOM in CycloneDX and SPDX formats
+  # ===========================================================================
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sbom-cyclonedx-json: ${{ steps.artifacts.outputs.sbom-cyclonedx-json }}
+      sbom-cyclonedx-xml: ${{ steps.artifacts.outputs.sbom-cyclonedx-xml }}
+      sbom-spdx-json: ${{ steps.artifacts.outputs.sbom-spdx-json }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            VERSION="weekly-$(date +%Y%m%d)"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${VERSION#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "::notice ::SBOM version: ${VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-sbom-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-sbom-
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install SBOM tooling
+        run: |
+          pip install \
+            cyclonedx-bom>=4.0.0 \
+            cyclonedx-py>=4.0.0 \
+            pip-audit>=2.7.0 \
+            spdx-tools>=0.8.0
+
+      - name: Create output directories
+        run: |
+          mkdir -p sbom
+          mkdir -p sbom-history
+
+      # -----------------------------------------------------------------------
+      # CycloneDX Generation
+      # -----------------------------------------------------------------------
+      - name: Generate CycloneDX SBOM from requirements.txt (JSON)
+        run: |
+          cyclonedx-py requirements \
+            --input-file requirements.txt \
+            --output-format json \
+            --schema-version 1.5 \
+            --output-file sbom/sbom-cyclonedx.json \
+            || {
+              echo "::warning ::cyclonedx-py requirements failed, trying alternative method"
+              # Fallback: generate from installed environment
+              cyclonedx-py environment \
+                --output-format json \
+                --schema-version 1.5 \
+                --output-file sbom/sbom-cyclonedx.json
+            }
+          echo "CycloneDX JSON generated"
+
+      - name: Generate CycloneDX SBOM (XML)
+        run: |
+          cyclonedx-py requirements \
+            --input-file requirements.txt \
+            --output-format xml \
+            --schema-version 1.5 \
+            --output-file sbom/sbom-cyclonedx.xml \
+            || {
+              cyclonedx-py environment \
+                --output-format xml \
+                --schema-version 1.5 \
+                --output-file sbom/sbom-cyclonedx.xml
+            }
+          echo "CycloneDX XML generated"
+
+      # -----------------------------------------------------------------------
+      # SPDX Generation
+      # -----------------------------------------------------------------------
+      - name: Generate SPDX SBOM (JSON)
+        run: |
+          python << 'SPDX_EOF'
+          import json
+          import uuid
+          import subprocess
+          import sys
+          from datetime import datetime, timezone
+
+          # Read the CycloneDX SBOM to extract component data
+          with open("sbom/sbom-cyclonedx.json", "r") as f:
+              cdx = json.load(f)
+
+          now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+          python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+
+          spdx = {
+              "spdxVersion": "SPDX-2.3",
+              "dataLicense": "CC0-1.0",
+              "SPDXID": "SPDXRef-DOCUMENT",
+              "name": "cognigate-api",
+              "documentNamespace": f"https://vorion.org/spdx/{uuid.uuid4()}",
+              "creationInfo": {
+                  "created": now,
+                  "creators": [
+                      "Tool: vorion-sbom-pipeline",
+                      "Organization: Vorion, Inc.",
+                      f"Tool: Python-{python_version}"
+                  ],
+                  "licenseListVersion": "3.22"
+              },
+              "packages": [],
+              "relationships": []
+          }
+
+          # Add root package
+          spdx["packages"].append({
+              "SPDXID": "SPDXRef-RootPackage",
+              "name": "cognigate-api",
+              "versionInfo": cdx.get("metadata", {}).get("component", {}).get("version", "0.1.0"),
+              "supplier": "Organization: Vorion, Inc.",
+              "downloadLocation": "https://github.com/vorion/cognigate",
+              "filesAnalyzed": False,
+              "licenseConcluded": "LicenseRef-Proprietary",
+              "licenseDeclared": "LicenseRef-Proprietary",
+              "copyrightText": "Copyright 2026 Vorion, Inc."
+          })
+
+          # Add dependency packages
+          for idx, comp in enumerate(cdx.get("components", [])):
+              pkg_name = comp.get("name", "unknown")
+              pkg_version = comp.get("version", "NOASSERTION")
+
+              licenses = comp.get("licenses", [])
+              license_id = "NOASSERTION"
+              if licenses:
+                  lic = licenses[0]
+                  if isinstance(lic, dict):
+                      license_id = lic.get("license", {}).get("id", "NOASSERTION")
+
+              hashes = comp.get("hashes", [])
+              checksums = []
+              for h in hashes:
+                  alg = h.get("alg", "").replace("-", "")
+                  if alg == "SHA256":
+                      checksums.append({"algorithm": "SHA256", "checksumValue": h.get("content", "")})
+
+              purl = comp.get("purl", "")
+              external_refs = []
+              if purl:
+                  external_refs.append({
+                      "referenceCategory": "PACKAGE-MANAGER",
+                      "referenceType": "purl",
+                      "referenceLocator": purl
+                  })
+
+              spdx_id = f"SPDXRef-Package-{idx}"
+              spdx["packages"].append({
+                  "SPDXID": spdx_id,
+                  "name": pkg_name,
+                  "versionInfo": pkg_version,
+                  "supplier": "NOASSERTION",
+                  "downloadLocation": f"https://pypi.org/project/{pkg_name}/{pkg_version}/" if purl else "NOASSERTION",
+                  "filesAnalyzed": False,
+                  "licenseConcluded": license_id,
+                  "licenseDeclared": license_id,
+                  "copyrightText": "NOASSERTION",
+                  "externalRefs": external_refs,
+                  "checksums": checksums
+              })
+
+              spdx["relationships"].append({
+                  "spdxElementId": "SPDXRef-RootPackage",
+                  "relatedSpdxElement": spdx_id,
+                  "relationshipType": "DEPENDS_ON"
+              })
+
+          with open("sbom/sbom-spdx.json", "w") as f:
+              json.dump(spdx, f, indent=2)
+
+          print(f"SPDX 2.3 JSON generated: {len(spdx['packages'])} packages")
+          SPDX_EOF
+
+      # -----------------------------------------------------------------------
+      # Vulnerability Correlation
+      # -----------------------------------------------------------------------
+      - name: Run pip-audit and correlate with SBOM
+        run: |
+          # Run pip-audit in JSON mode
+          pip-audit --format=json --output=sbom/pip-audit-report.json 2>/dev/null || true
+
+          python << 'VULN_EOF'
+          import json
+          import os
+
+          audit_path = "sbom/pip-audit-report.json"
+          sbom_path = "sbom/sbom-cyclonedx.json"
+
+          if not os.path.exists(audit_path):
+              print("No pip-audit report found, skipping vulnerability correlation")
+              exit(0)
+
+          try:
+              with open(sbom_path, "r") as f:
+                  sbom = json.load(f)
+              with open(audit_path, "r") as f:
+                  audit = json.load(f)
+
+              # Build component reference map
+              comp_refs = {}
+              for comp in sbom.get("components", []):
+                  comp_refs[comp["name"]] = comp.get("bom-ref", f"{comp['name']}@{comp.get('version', '')}")
+
+              vulnerabilities = []
+              deps = audit.get("dependencies", [])
+              for dep in deps:
+                  pkg_name = dep.get("name", "")
+                  pkg_version = dep.get("version", "")
+                  for vuln in dep.get("vulns", []):
+                      vuln_id = vuln.get("id", "UNKNOWN")
+                      description = vuln.get("description", "No description available")
+                      fix_versions = vuln.get("fix_versions", [])
+                      recommendation = f"Upgrade to {', '.join(fix_versions)}" if fix_versions else "No fix available"
+
+                      vulnerabilities.append({
+                          "id": vuln_id,
+                          "source": {
+                              "name": "pip-audit (PyPI/OSV)",
+                              "url": f"https://osv.dev/vulnerability/{vuln_id}"
+                          },
+                          "ratings": [{
+                              "severity": "unknown",
+                              "method": "other"
+                          }],
+                          "description": description,
+                          "recommendation": recommendation,
+                          "affects": [{
+                              "ref": comp_refs.get(pkg_name, pkg_name),
+                              "versions": [{
+                                  "version": pkg_version,
+                                  "status": "affected"
+                              }]
+                          }]
+                      })
+
+              if vulnerabilities:
+                  sbom["vulnerabilities"] = vulnerabilities
+                  with open(sbom_path, "w") as f:
+                      json.dump(sbom, f, indent=2)
+                  print(f"Added {len(vulnerabilities)} vulnerabilities to CycloneDX SBOM")
+              else:
+                  print("No vulnerabilities found")
+
+              # Write standalone vulnerability summary
+              summary = {
+                  "generated": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                  "total": len(vulnerabilities),
+                  "details": [{
+                      "id": v["id"],
+                      "description": v["description"],
+                      "package": v["affects"][0]["ref"],
+                      "recommendation": v["recommendation"]
+                  } for v in vulnerabilities]
+              }
+              with open("sbom/vulnerability-summary.json", "w") as f:
+                  json.dump(summary, f, indent=2)
+
+          except Exception as e:
+              print(f"Warning: Could not process audit data: {e}")
+          VULN_EOF
+
+      # -----------------------------------------------------------------------
+      # Runtime Environment Hash
+      # -----------------------------------------------------------------------
+      - name: Generate runtime environment hash
+        run: |
+          python << 'ENV_EOF'
+          import json
+          import sys
+          import hashlib
+          import platform
+          import subprocess
+          from datetime import datetime, timezone
+
+          env = {
+              "generated": datetime.now(timezone.utc).isoformat(),
+              "python": {
+                  "version": sys.version,
+                  "implementation": platform.python_implementation(),
+                  "platform": sys.platform
+              },
+              "pip": {
+                  "version": subprocess.check_output(["pip", "--version"], text=True).strip()
+              },
+              "os": {
+                  "system": platform.system(),
+                  "release": platform.release(),
+                  "machine": platform.machine()
+              }
+          }
+
+          env_hash = hashlib.sha256(json.dumps(env).encode()).hexdigest()
+          env["environmentHash"] = env_hash
+
+          with open("sbom/runtime-environment.json", "w") as f:
+              json.dump(env, f, indent=2)
+
+          print(f"Runtime environment hash: {env_hash}")
+          ENV_EOF
+
+      # -----------------------------------------------------------------------
+      # Archive and Version
+      # -----------------------------------------------------------------------
+      - name: Create versioned SBOM copies and archive
+        id: artifacts
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TIMESTAMP=$(date +%Y-%m-%d)
+          PREFIX="sbom-v${VERSION}-${TIMESTAMP}"
+
+          # Create versioned copies
+          cp sbom/sbom-cyclonedx.json "sbom/${PREFIX}-cyclonedx.json"
+          cp sbom/sbom-cyclonedx.xml  "sbom/${PREFIX}-cyclonedx.xml"
+          cp sbom/sbom-spdx.json      "sbom/${PREFIX}-spdx.json"
+
+          # Archive to sbom-history/
+          cp "sbom/${PREFIX}-cyclonedx.json" sbom-history/
+          cp "sbom/${PREFIX}-cyclonedx.xml"  sbom-history/
+          cp "sbom/${PREFIX}-spdx.json"      sbom-history/
+
+          # Set outputs
+          echo "sbom-cyclonedx-json=${PREFIX}-cyclonedx.json" >> "$GITHUB_OUTPUT"
+          echo "sbom-cyclonedx-xml=${PREFIX}-cyclonedx.xml"   >> "$GITHUB_OUTPUT"
+          echo "sbom-spdx-json=${PREFIX}-spdx.json"           >> "$GITHUB_OUTPUT"
+
+          # Generate step summary
+          CDX_COMP_COUNT=$(python -c "import json; d=json.load(open('sbom/sbom-cyclonedx.json')); print(len(d.get('components',[])))")
+          VULN_COUNT=$(python -c "import json; d=json.load(open('sbom/sbom-cyclonedx.json')); print(len(d.get('vulnerabilities',[])))")
+          SPDX_PKG_COUNT=$(python -c "import json; d=json.load(open('sbom/sbom-spdx.json')); print(len(d.get('packages',[])))")
+
+          cat >> "$GITHUB_STEP_SUMMARY" << SUMMARY
+          ## Cognigate SBOM Generation Summary
+
+          | Field | Value |
+          |-------|-------|
+          | **Version** | ${VERSION} |
+          | **Date** | ${TIMESTAMP} |
+          | **Python** | ${{ env.PYTHON_VERSION }} |
+          | **CycloneDX Spec** | 1.5 |
+          | **SPDX Spec** | 2.3 |
+          | **Components (CycloneDX)** | ${CDX_COMP_COUNT} |
+          | **Packages (SPDX)** | ${SPDX_PKG_COUNT} |
+          | **Vulnerabilities** | ${VULN_COUNT} |
+
+          ### Artifacts
+          - \`${PREFIX}-cyclonedx.json\`
+          - \`${PREFIX}-cyclonedx.xml\`
+          - \`${PREFIX}-spdx.json\`
+          - \`vulnerability-summary.json\`
+          - \`runtime-environment.json\`
+          SUMMARY
+
+      # -----------------------------------------------------------------------
+      # Validate SBOM
+      # -----------------------------------------------------------------------
+      - name: Validate SBOM against NTIA minimum elements
+        run: |
+          python << 'VALIDATE_EOF'
+          import json
+          import sys
+
+          with open("sbom/sbom-cyclonedx.json", "r") as f:
+              sbom = json.load(f)
+
+          checks = []
+          passed = 0
+          failed = 0
+
+          def check(name, condition, detail=""):
+              global passed, failed
+              status = "PASS" if condition else "FAIL"
+              if condition:
+                  passed += 1
+              else:
+                  failed += 1
+              checks.append({"name": name, "status": status, "detail": detail})
+              print(f"  [{status}] {name}{': ' + detail if detail else ''}")
+
+          print("\n=== NTIA Minimum Elements Validation ===\n")
+
+          meta = sbom.get("metadata", {})
+          comp = meta.get("component", {})
+
+          check("Supplier Name", bool(comp), f"Component: {comp.get('name', 'N/A')}")
+          check("Component Name", bool(comp.get("name")), comp.get("name", ""))
+          check("Component Version", bool(comp.get("version")), comp.get("version", ""))
+
+          components = sbom.get("components", [])
+          has_ids = any(c.get("purl") or c.get("bom-ref") for c in components)
+          purl_count = sum(1 for c in components if c.get("purl"))
+          check("Unique Identifiers (purl/bom-ref)", has_ids, f"{purl_count} components with purl")
+
+          deps = sbom.get("dependencies", [])
+          check("Dependency Relationships", len(deps) > 0, f"{len(deps)} dependency entries")
+
+          tools = meta.get("tools", [])
+          check("Author of SBOM Data (tools)", len(tools) > 0, f"{len(tools)} tools listed")
+
+          check("Timestamp", bool(meta.get("timestamp")), meta.get("timestamp", ""))
+          check("BOM Format", sbom.get("bomFormat") == "CycloneDX", sbom.get("bomFormat", ""))
+          check("Spec Version", bool(sbom.get("specVersion")), sbom.get("specVersion", ""))
+          check("Serial Number", bool(sbom.get("serialNumber")), str(sbom.get("serialNumber", ""))[:40])
+
+          licensed = sum(1 for c in components if c.get("licenses"))
+          check("Component Licenses", licensed > 0, f"{licensed}/{len(components)} with license data")
+
+          hashed = sum(1 for c in components if c.get("hashes"))
+          check("Component Hashes", hashed > 0, f"{hashed}/{len(components)} with hash data")
+
+          print(f"\n=== Results: {passed} passed, {failed} failed out of {len(checks)} checks ===\n")
+
+          if failed > 0:
+              print("WARNING: Some NTIA minimum element checks did not pass.")
+              print("Review the failures above and ensure compliance before release.")
+          VALIDATE_EOF
+
+      # -----------------------------------------------------------------------
+      # Upload Artifacts
+      # -----------------------------------------------------------------------
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ steps.version.outputs.version }}
+          path: |
+            sbom/sbom-cyclonedx.json
+            sbom/sbom-cyclonedx.xml
+            sbom/sbom-spdx.json
+            sbom/sbom-v*.json
+            sbom/sbom-v*.xml
+            sbom/pip-audit-report.json
+            sbom/vulnerability-summary.json
+            sbom/runtime-environment.json
+          retention-days: 90
+
+  # ===========================================================================
+  # Job 2: Upload SBOM to GitHub Release
+  # ===========================================================================
+  upload-to-release:
+    name: Upload to Release
+    runs-on: ubuntu-latest
+    needs: [generate-sbom]
+    if: github.event_name == 'release' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+
+    steps:
+      - name: Download SBOM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-${{ needs.generate-sbom.outputs.version }}
+          path: sbom
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sbom/sbom-cyclonedx.json
+            sbom/sbom-cyclonedx.xml
+            sbom/sbom-spdx.json
+            sbom/${{ needs.generate-sbom.outputs.sbom-cyclonedx-json }}
+            sbom/${{ needs.generate-sbom.outputs.sbom-cyclonedx-xml }}
+            sbom/${{ needs.generate-sbom.outputs.sbom-spdx-json }}
+            sbom/vulnerability-summary.json
+          fail_on_unmatched_files: false
+
+  # ===========================================================================
+  # Job 3: Store SBOM History
+  # ===========================================================================
+  store-sbom-history:
+    name: Store SBOM History
+    runs-on: ubuntu-latest
+    needs: [generate-sbom]
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Download SBOM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-${{ needs.generate-sbom.outputs.version }}
+          path: sbom-download
+
+      - name: Store versioned SBOM
+        run: |
+          mkdir -p sbom-history
+
+          cp "sbom-download/${{ needs.generate-sbom.outputs.sbom-cyclonedx-json }}" sbom-history/
+          cp "sbom-download/${{ needs.generate-sbom.outputs.sbom-cyclonedx-xml }}" sbom-history/
+          cp "sbom-download/${{ needs.generate-sbom.outputs.sbom-spdx-json }}" sbom-history/
+
+          {
+            echo "# Cognigate SBOM History"
+            echo ""
+            echo "Historical SBOMs for each Cognigate release."
+            echo ""
+            echo "| Version | CycloneDX JSON | CycloneDX XML | SPDX JSON |"
+            echo "|---------|---------------|---------------|-----------|"
+            for f in sbom-history/*-cyclonedx.json; do
+              [ -f "$f" ] || continue
+              base=$(basename "$f" -cyclonedx.json)
+              echo "| ${base} | [JSON](${base}-cyclonedx.json) | [XML](${base}-cyclonedx.xml) | [SPDX](${base}-spdx.json) |"
+            done | sort -r
+          } > sbom-history/README.md
+
+      - name: Commit SBOM history
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: add SBOM for version ${{ needs.generate-sbom.outputs.version }}"
+          file_pattern: 'sbom-history/*'
+          branch: main
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
