@@ -8,7 +8,7 @@ Provides SQLAlchemy async database support for:
 """
 
 from .database import init_db, close_db, get_session, Base
-from .models import ProofRecordDB, ChainStateDB
+from .models import ProofRecordDB, ChainStateDB, TrustStateDB, TrustSignalDB
 from .evidence_models import ControlEvidenceDB, ControlHealthDB, ComplianceSnapshotDB
 from .proof_repository import ProofRepository, GENESIS_HASH
 from .evidence_repository import EvidenceRepository
@@ -22,6 +22,8 @@ __all__ = [
     # Models
     "ProofRecordDB",
     "ChainStateDB",
+    "TrustStateDB",
+    "TrustSignalDB",
     # Evidence models
     "ControlEvidenceDB",
     "ControlHealthDB",

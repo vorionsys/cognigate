@@ -5,7 +5,7 @@ SQLAlchemy models for Cognigate database tables.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -69,3 +69,34 @@ class ChainStateDB(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow
     )
+
+
+class TrustStateDB(Base):
+    """Persisted trust state for agents."""
+    __tablename__ = "trust_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(256))
+    score: Mapped[int] = mapped_column(Integer, default=200)
+    tier: Mapped[int] = mapped_column(Integer, default=1)
+    ceiling: Mapped[int] = mapped_column(Integer, default=4)
+    capabilities: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array
+    observation_tier: Mapped[str] = mapped_column(String(32), default="GRAY_BOX")
+    is_revoked: Mapped[bool] = mapped_column(Integer, default=False)  # SQLite compat
+    admitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TrustSignalDB(Base):
+    """Persisted trust signals for audit trail."""
+    __tablename__ = "trust_signals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[str] = mapped_column(String(128), index=True)
+    signal_type: Mapped[str] = mapped_column(String(32))
+    source: Mapped[str] = mapped_column(String(256))
+    weight: Mapped[float] = mapped_column(Float, default=0.5)
+    delta: Mapped[int] = mapped_column(Integer)
+    context_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

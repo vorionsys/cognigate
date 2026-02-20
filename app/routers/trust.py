@@ -5,11 +5,14 @@ Port of apps/cognigate-api/src/routes/trust.ts to Python/FastAPI.
 Manages trust admission, scoring, signals, and revocation.
 """
 
+import json
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import verify_api_key
 from app.constants_bridge import (
@@ -17,6 +20,8 @@ from app.constants_bridge import (
     TrustTier,
     score_to_tier,
 )
+from app.db import get_session
+from app.db.models import TrustStateDB, TrustSignalDB
 
 router = APIRouter()
 
@@ -68,7 +73,11 @@ SIGNAL_WEIGHTS = {
 # =============================================================================
 
 @router.post("/trust/admit", summary="Admit agent (establish Gate Trust)")
-async def admit_agent(body: AdmitRequest, _: str = Depends(verify_api_key)) -> dict:
+async def admit_agent(
+    body: AdmitRequest,
+    _: str = Depends(verify_api_key),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
     """
     Admit an agent into the trust system, establishing initial Gate Trust.
 
@@ -105,6 +114,19 @@ async def admit_agent(body: AdmitRequest, _: str = Depends(verify_api_key)) -> d
     }
     _trust_signals[body.agentId] = []
 
+    # Persist to database
+    db_state = TrustStateDB(
+        agent_id=body.agentId,
+        name=body.name,
+        score=initial_score,
+        tier=initial_tier,
+        ceiling=ceiling,
+        capabilities=json.dumps(body.capabilities),
+        observation_tier=body.observationTier,
+    )
+    session.add(db_state)
+    # session commits via get_session context manager
+
     return {
         "admitted": True,
         "initialTier": initial_tier,
@@ -133,11 +155,36 @@ async def get_tiers() -> dict:
 
 
 @router.get("/trust/{agent_id}", summary="Get current trust status")
-async def get_trust(agent_id: str, _: str = Depends(verify_api_key)) -> dict:
+async def get_trust(
+    agent_id: str,
+    _: str = Depends(verify_api_key),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
     """
     Get the current trust score, tier, and observation ceiling for an agent.
     """
+    # Try in-memory first, then database
     info = _trust_state.get(agent_id)
+    if not info:
+        result = await session.execute(
+            select(TrustStateDB).where(TrustStateDB.agent_id == agent_id)
+        )
+        db_state = result.scalar_one_or_none()
+        if db_state:
+            # Hydrate in-memory cache from DB
+            info = {
+                "agentId": db_state.agent_id,
+                "name": db_state.name,
+                "score": db_state.score,
+                "tier": score_to_tier(db_state.score),
+                "ceiling": TrustTier(db_state.ceiling),
+                "capabilities": json.loads(db_state.capabilities or "[]"),
+                "observationTier": db_state.observation_tier,
+                "isRevoked": bool(db_state.is_revoked),
+                "admittedAt": db_state.admitted_at.isoformat(),
+            }
+            _trust_state[agent_id] = info
+
     if not info:
         return {
             "agentId": agent_id,
@@ -159,7 +206,12 @@ async def get_trust(agent_id: str, _: str = Depends(verify_api_key)) -> dict:
 
 
 @router.post("/trust/{agent_id}/signal", summary="Record trust signal")
-async def record_signal(agent_id: str, body: SignalRequest, _: str = Depends(verify_api_key)) -> dict:
+async def record_signal(
+    agent_id: str,
+    body: SignalRequest,
+    _: str = Depends(verify_api_key),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
     """
     Record a trust signal for an agent (success, failure, violation, or neutral).
 
@@ -203,6 +255,26 @@ async def record_signal(agent_id: str, body: SignalRequest, _: str = Depends(ver
     }
     _trust_signals.setdefault(agent_id, []).append(signal_record)
 
+    # Persist signal to database
+    db_signal = TrustSignalDB(
+        agent_id=agent_id,
+        signal_type=body.type,
+        source=body.source,
+        weight=body.weight,
+        delta=delta,
+        context_json=json.dumps(body.context) if body.context else None,
+    )
+    session.add(db_signal)
+
+    # Update trust state in DB
+    result = await session.execute(
+        select(TrustStateDB).where(TrustStateDB.agent_id == agent_id)
+    )
+    db_state = result.scalar_one_or_none()
+    if db_state:
+        db_state.score = new_score
+        db_state.tier = new_tier
+
     tier_info = TIER_THRESHOLDS[new_tier]
     return {
         "accepted": True,
@@ -215,7 +287,12 @@ async def record_signal(agent_id: str, body: SignalRequest, _: str = Depends(ver
 
 
 @router.post("/trust/{agent_id}/revoke", summary="Revoke agent trust")
-async def revoke_trust(agent_id: str, body: RevokeRequest, _: str = Depends(verify_api_key)) -> dict:
+async def revoke_trust(
+    agent_id: str,
+    body: RevokeRequest,
+    _: str = Depends(verify_api_key),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
     """
     Revoke an agent's trust, setting its score to 0 and marking it as revoked.
     """
@@ -226,6 +303,16 @@ async def revoke_trust(agent_id: str, body: RevokeRequest, _: str = Depends(veri
     info["score"] = 0
     info["tier"] = TrustTier.T0_SANDBOX
     info["isRevoked"] = True
+
+    # Persist revocation to database
+    result = await session.execute(
+        select(TrustStateDB).where(TrustStateDB.agent_id == agent_id)
+    )
+    db_state = result.scalar_one_or_none()
+    if db_state:
+        db_state.score = 0
+        db_state.tier = TrustTier.T0_SANDBOX
+        db_state.is_revoked = True
 
     return {
         "revoked": True,
