@@ -86,6 +86,17 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
     redis_enabled: bool = False  # Disabled by default, graceful degradation
 
+    # Federation Configuration — IA-8(1), IA-8(2) [PLANNED]
+    # OIDC federation for accepting external identity assertions
+    oidc_enabled: bool = False
+    oidc_issuer_url: str = ""       # e.g., "https://login.gov" or "https://accounts.google.com"
+    oidc_client_id: str = ""        # OIDC client/application ID
+    oidc_audience: str = ""         # Expected audience claim in ID tokens
+
+    # SAML federation for accepting government IdP assertions
+    saml_enabled: bool = False
+    saml_idp_metadata_url: str = ""  # e.g., "https://idp.agency.gov/metadata.xml"
+
     # Signature System
     signature_enabled: bool = True
     signature_private_key: str = ""  # Base64-encoded PEM private key (optional)

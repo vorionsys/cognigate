@@ -3,9 +3,14 @@ Authentication for Cognigate Endpoints.
 
 Provides API key authentication for admin and pipeline operations.
 Production deployments should use strong, rotated API keys.
+
+IA-5(1) Compliance: API key strength validation ensures minimum
+authenticator complexity (128-bit entropy, mixed character classes,
+no weak/default patterns). See validate_api_key_strength().
 """
 
 import logging
+import re
 import secrets
 import time
 from typing import Optional
@@ -129,19 +134,142 @@ async def verify_api_key(
     return api_key
 
 
-def generate_api_key(length: int = 32) -> str:
-    """
-    Generate a secure random API key.
+# ---------------------------------------------------------------------------
+# IA-5(1) — Authenticator Strength Validation [IMPLEMENTED]
+# ---------------------------------------------------------------------------
 
-    Use this to generate keys for production deployments.
+# Known weak/default values that MUST be rejected regardless of length.
+_KNOWN_WEAK_VALUES: set[str] = {
+    "CHANGE_ME_IN_PRODUCTION",
+    "changeme",
+    "secret",
+    "password",
+    "admin",
+    "test",
+    "default",
+    "0" * 32,
+    "0" * 64,
+    "1234567890abcdef" * 2,
+    "1234567890abcdef" * 4,
+    "abcdef1234567890" * 2,
+    "abcdef1234567890" * 4,
+}
+
+# Patterns indicating insufficient entropy (sequential, repeated, etc.)
+_WEAK_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"^(.)\1+$"),                    # All same character (e.g., "aaa...a")
+    re.compile(r"^(..)\1+$"),                   # Two-char repeat (e.g., "abababab")
+    re.compile(r"^0123456789abcdef", re.I),     # Sequential hex ascending
+    re.compile(r"^fedcba9876543210", re.I),     # Sequential hex descending
+    re.compile(r"^(0+|f+)$", re.I),             # All zeros or all f's
+    re.compile(r"^(.{1,4})\1{7,}$"),            # Short pattern repeated 8+ times
+]
+
+# Minimum key length: 32 characters = 128-bit entropy minimum for hex keys.
+_MIN_KEY_LENGTH: int = 32
+
+
+def validate_api_key_strength(key: str) -> tuple[bool, str]:
+    """
+    Validate that an API key meets minimum authenticator complexity requirements.
+
+    Enforces IA-5(1) authenticator management controls adapted for API keys:
+    - Minimum length: 32 characters (128-bit entropy minimum)
+    - Must not be a known weak/default value
+    - Must not match common weak patterns (all zeros, sequential, repeated)
+    - Must contain mixed character classes (hex keys naturally satisfy this
+      with digits + letters when generated via secrets.token_hex)
 
     Args:
-        length: Number of bytes (will be hex-encoded, so 2x characters)
+        key: The API key string to validate.
 
     Returns:
-        Hex-encoded random string
+        Tuple of (is_valid, reason). If is_valid is True, reason is empty.
+        If is_valid is False, reason describes the specific weakness.
     """
-    return secrets.token_hex(length)
+    if not key:
+        return False, "API key is empty"
+
+    # --- Length check (128-bit minimum entropy) ---
+    if len(key) < _MIN_KEY_LENGTH:
+        return False, (
+            f"API key too short: {len(key)} characters "
+            f"(minimum {_MIN_KEY_LENGTH} for 128-bit entropy)"
+        )
+
+    # --- Known weak/default values ---
+    if key in _KNOWN_WEAK_VALUES or key.lower() in _KNOWN_WEAK_VALUES:
+        return False, "API key matches a known weak or default value"
+
+    # --- Weak pattern detection ---
+    for pattern in _WEAK_PATTERNS:
+        if pattern.match(key):
+            return False, (
+                f"API key matches a weak pattern: {pattern.pattern}"
+            )
+
+    # --- Character class diversity ---
+    # For hex-encoded keys, we expect both digits and letters.
+    # For prefixed keys (e.g., "cg_..."), the prefix satisfies diversity.
+    has_digit = bool(re.search(r"\d", key))
+    has_alpha = bool(re.search(r"[a-zA-Z]", key))
+
+    if not (has_digit and has_alpha):
+        return False, (
+            "API key lacks character class diversity "
+            "(must contain both letters and digits)"
+        )
+
+    logger.debug("api_key_strength_validated", key_length=len(key))
+    return True, ""
+
+
+def generate_api_key(length: int = 32, max_attempts: int = 5) -> str:
+    """
+    Generate a secure random API key that passes strength validation.
+
+    Uses secrets.token_hex() for cryptographic randomness. Validates the
+    generated key against IA-5(1) strength requirements and regenerates
+    if necessary (extremely unlikely with proper CSPRNG, but provides
+    defense-in-depth).
+
+    Args:
+        length: Number of bytes (will be hex-encoded, so 2x characters).
+                Must be >= 16 (128-bit minimum entropy).
+        max_attempts: Maximum regeneration attempts before raising an error.
+
+    Returns:
+        Hex-encoded random string that passes strength validation.
+
+    Raises:
+        ValueError: If length is below the minimum (16 bytes / 32 hex chars).
+        RuntimeError: If key generation fails strength validation after
+                      max_attempts (indicates CSPRNG failure — should never
+                      happen in practice).
+    """
+    if length < 16:
+        raise ValueError(
+            f"Key length must be >= 16 bytes (128-bit minimum). Got: {length}"
+        )
+
+    for attempt in range(1, max_attempts + 1):
+        key = secrets.token_hex(length)
+        is_valid, reason = validate_api_key_strength(key)
+
+        if is_valid:
+            return key
+
+        # This should essentially never happen with a healthy CSPRNG
+        logger.warning(
+            "api_key_generation_weak_key_rejected",
+            attempt=attempt,
+            reason=reason,
+        )
+
+    raise RuntimeError(
+        f"Failed to generate a strong API key after {max_attempts} attempts. "
+        "This may indicate a CSPRNG failure — investigate immediately."
+    )
 
 
 # TOTP MFA header

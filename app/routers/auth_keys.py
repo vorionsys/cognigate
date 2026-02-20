@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.auth import verify_api_key
+from app.core.auth import validate_api_key_strength, verify_api_key
 
 router = APIRouter()
 
@@ -55,6 +55,20 @@ async def create_key(body: CreateKeyRequest, _: str = Depends(verify_api_key)) -
     """
     key_id = f"key_{secrets.token_hex(6)}"
     raw_key = f"cg_{secrets.token_hex(24)}"
+
+    # IA-5(1): Validate key strength before storing
+    is_valid, reason = validate_api_key_strength(raw_key)
+    if not is_valid:
+        # Regenerate once — cryptographically random keys should always pass,
+        # but defense-in-depth requires verification.
+        raw_key = f"cg_{secrets.token_hex(24)}"
+        is_valid, reason = validate_api_key_strength(raw_key)
+        if not is_valid:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to generate sufficiently strong API key: {reason}",
+            )
+
     hashed = _hash_key(raw_key)
 
     _api_keys[key_id] = {
