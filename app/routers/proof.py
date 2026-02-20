@@ -17,6 +17,7 @@ from app.models.proof import ProofRecord, ProofQuery, ProofVerification, ProofSt
 from app.models.enforce import EnforceResponse
 from app.db import get_session, ProofRepository
 from app.core.signatures import sign_proof_record, verify_proof_signature
+from app.core.evidence_hook import on_proof_created
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -99,6 +100,18 @@ async def create_proof_record(
         chain_position=record.chain_position,
         decision=decision,
     )
+
+    # Generate compliance evidence from the proof record.
+    # Wrapped in try/except so evidence generation failures never block
+    # proof chain operations — proof creation is primary, evidence is
+    # supplementary.
+    try:
+        await on_proof_created(record, session)
+    except Exception:
+        logger.exception(
+            "evidence_hook_call_failed",
+            proof_id=record.proof_id,
+        )
 
     return record
 
