@@ -34,6 +34,10 @@ SUPPORTED_FRAMEWORKS: list[str] = [
     "GDPR",
     "SINGAPORE-PDPA",
     "JAPAN-APPI",
+    "NIST-800-171",
+    "ISO-27001",
+    "FedRAMP",
+    "COSAiS",
 ]
 
 # ---------------------------------------------------------------------------

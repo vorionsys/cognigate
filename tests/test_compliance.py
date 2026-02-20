@@ -26,6 +26,7 @@ from app.core.control_health import (
     ControlHealthEngine,
     SUPPORTED_FRAMEWORKS,
 )
+from app.core.evidence_mapper import EvidenceMapper
 from app.core.policy_engine import PolicyEngine
 from app.core.signatures import SignatureManager
 from app.core.velocity import VelocityTracker
@@ -496,8 +497,212 @@ class TestControlHealthEngineEdgeCases:
         total_from_fws = sum(fw.total_controls for fw in dash.frameworks)
         assert dash.total_controls == total_from_fws
 
-    async def test_all_nine_frameworks_in_dashboard(self, healthy_engine):
+    async def test_all_frameworks_in_dashboard(self, healthy_engine):
         dash = await healthy_engine.get_dashboard()
         fw_names = {fw.framework for fw in dash.frameworks}
         for fw in ALL_FRAMEWORK_CONTROLS:
             assert fw in fw_names
+
+
+# =========================================================================
+# Framework count validation
+# =========================================================================
+
+
+class TestSupportedFrameworksCount:
+    """Verify SUPPORTED_FRAMEWORKS covers all 13 registry frameworks."""
+
+    def test_supported_frameworks_has_13_entries(self):
+        assert len(SUPPORTED_FRAMEWORKS) == 13
+
+    def test_all_framework_controls_has_13_entries(self):
+        assert len(ALL_FRAMEWORK_CONTROLS) == 13
+
+    def test_new_frameworks_in_supported_list(self):
+        for fw in ["NIST-800-171", "ISO-27001", "FedRAMP", "COSAiS"]:
+            assert fw in SUPPORTED_FRAMEWORKS, f"Missing framework: {fw}"
+
+    def test_new_frameworks_in_all_framework_controls(self):
+        for fw in ["NIST-800-171", "ISO-27001", "FedRAMP", "COSAiS"]:
+            assert fw in ALL_FRAMEWORK_CONTROLS, f"Missing framework: {fw}"
+
+    def test_supported_frameworks_matches_all_framework_controls(self):
+        """Every framework in ALL_FRAMEWORK_CONTROLS should be in SUPPORTED_FRAMEWORKS."""
+        for fw in ALL_FRAMEWORK_CONTROLS:
+            assert fw in SUPPORTED_FRAMEWORKS
+
+
+# =========================================================================
+# New framework health checker tests
+# =========================================================================
+
+
+@pytest.mark.asyncio
+class TestNIST800171Health:
+    """Tests for NIST 800-171 CUI protection framework."""
+
+    async def test_nist_800_171_compliant_when_healthy(self, healthy_engine):
+        fw = await healthy_engine.compute_framework_health("NIST-800-171")
+        assert fw.framework == "NIST-800-171"
+        assert fw.status == "compliant"
+        assert len(fw.controls) == 7
+
+    async def test_nist_800_171_access_control_compliant(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("3.1", "NIST-800-171")
+        assert ctl.status == "compliant"
+
+    async def test_nist_800_171_audit_compliant(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("3.3", "NIST-800-171")
+        assert ctl.status == "compliant"
+
+    async def test_nist_800_171_access_control_degrades_without_policies(self, degraded_engine):
+        ctl = await degraded_engine.compute_control("3.1", "NIST-800-171")
+        assert ctl.status == "non_compliant"
+
+    async def test_nist_800_171_audit_degrades_without_signatures(self, degraded_engine):
+        ctl = await degraded_engine.compute_control("3.3", "NIST-800-171")
+        assert ctl.status == "degraded"
+
+    async def test_nist_800_171_integrity_degrades_cb_open(self, degraded_engine):
+        ctl = await degraded_engine.compute_control("3.14", "NIST-800-171")
+        assert ctl.status == "degraded"
+        assert "circuit_breaker_open" in ctl.issues
+
+
+@pytest.mark.asyncio
+class TestISO27001Health:
+    """Tests for ISO 27001 Annex A control themes."""
+
+    async def test_iso_27001_compliant_when_healthy(self, healthy_engine):
+        fw = await healthy_engine.compute_framework_health("ISO-27001")
+        assert fw.framework == "ISO-27001"
+        assert fw.status == "compliant"
+        assert len(fw.controls) == 4
+
+    async def test_iso_27001_physical_always_compliant(self, degraded_engine):
+        """Physical controls are inherited for SaaS — always compliant."""
+        ctl = await degraded_engine.compute_control("A.7", "ISO-27001")
+        assert ctl.status == "compliant"
+
+    async def test_iso_27001_organizational_degrades_without_policies(self, degraded_engine):
+        ctl = await degraded_engine.compute_control("A.5", "ISO-27001")
+        assert ctl.status == "degraded"
+
+    async def test_iso_27001_technological_degrades_when_unhealthy(self, degraded_engine):
+        ctl = await degraded_engine.compute_control("A.8", "ISO-27001")
+        assert ctl.status == "degraded"
+
+
+@pytest.mark.asyncio
+class TestFedRAMPHealth:
+    """Tests for FedRAMP framework (800-53 with additions)."""
+
+    async def test_fedramp_compliant_when_healthy(self, healthy_engine):
+        fw = await healthy_engine.compute_framework_health("FedRAMP")
+        assert fw.framework == "FedRAMP"
+        assert fw.status == "compliant"
+        assert len(fw.controls) == 17
+
+    async def test_fedramp_inherits_nist_ac2(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("AC-2", "FedRAMP")
+        assert ctl.status == "compliant"
+
+    async def test_fedramp_continuous_monitoring_active(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("FR-CM", "FedRAMP")
+        assert ctl.status == "compliant"
+
+    async def test_fedramp_oscal_present(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("FR-OSCAL", "FedRAMP")
+        assert ctl.status == "compliant"
+
+    async def test_fedramp_sbom_current(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("FR-SBOM", "FedRAMP")
+        assert ctl.status == "compliant"
+
+    async def test_fedramp_inherits_degraded_state(self, degraded_engine):
+        """When 800-53 controls degrade, FedRAMP inherits that degradation."""
+        ctl = await degraded_engine.compute_control("AC-3", "FedRAMP")
+        assert ctl.status == "non_compliant"
+
+
+@pytest.mark.asyncio
+class TestCOSAiSHealth:
+    """Tests for COSAiS AI-specific overlay controls."""
+
+    async def test_cosais_compliant_when_healthy(self, healthy_engine):
+        fw = await healthy_engine.compute_framework_health("COSAiS")
+        assert fw.framework == "COSAiS"
+        assert fw.status == "compliant"
+        assert len(fw.controls) == 4
+
+    async def test_cosais_ai_access_control_compliant(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("AIS-AC", "COSAiS")
+        assert ctl.status == "compliant"
+
+    async def test_cosais_ai_audit_compliant(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("AIS-AU", "COSAiS")
+        assert ctl.status == "compliant"
+
+    async def test_cosais_ai_risk_assessment_compliant(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("AIS-RA", "COSAiS")
+        assert ctl.status == "compliant"
+
+    async def test_cosais_ai_integrity_compliant(self, healthy_engine):
+        ctl = await healthy_engine.compute_control("AIS-SI", "COSAiS")
+        assert ctl.status == "compliant"
+
+    async def test_cosais_ai_access_degrades_without_policies(self, degraded_engine):
+        ctl = await degraded_engine.compute_control("AIS-AC", "COSAiS")
+        assert ctl.status == "non_compliant"
+
+    async def test_cosais_ai_integrity_degrades_cb_open(self, degraded_engine):
+        ctl = await degraded_engine.compute_control("AIS-SI", "COSAiS")
+        assert ctl.status in ("degraded", "non_compliant")
+        assert "circuit_breaker_open" in ctl.issues
+
+
+# =========================================================================
+# Evidence mapper coverage for new frameworks
+# =========================================================================
+
+
+class TestEvidenceMapperNewFrameworks:
+    """Verify evidence mapper produces records for SINGAPORE-PDPA and JAPAN-APPI."""
+
+    def test_evidence_mapper_covers_singapore_pdpa(self):
+        mapper = EvidenceMapper()
+        assert "SINGAPORE-PDPA" in mapper.supported_frameworks
+
+    def test_evidence_mapper_covers_japan_appi(self):
+        mapper = EvidenceMapper()
+        assert "JAPAN-APPI" in mapper.supported_frameworks
+
+    def test_evidence_mapper_covers_9_frameworks(self):
+        mapper = EvidenceMapper()
+        assert len(mapper.supported_frameworks) >= 9
+
+    def test_singapore_pdpa_has_coverage(self):
+        mapper = EvidenceMapper()
+        coverage = mapper.get_framework_coverage("SINGAPORE-PDPA")
+        assert len(coverage) > 0, "SINGAPORE-PDPA should have mapped controls"
+        # Should cover at least Part-IV-s24 (Protection)
+        assert "Part-IV-s24" in coverage
+
+    def test_japan_appi_has_coverage(self):
+        mapper = EvidenceMapper()
+        coverage = mapper.get_framework_coverage("JAPAN-APPI")
+        assert len(coverage) > 0, "JAPAN-APPI should have mapped controls"
+        # Should cover at least Art-23 (Third-party provision)
+        assert "Art-23" in coverage
+
+    def test_singapore_pdpa_covered_by_key_events(self):
+        mapper = EvidenceMapper()
+        coverage = mapper.get_framework_coverage("SINGAPORE-PDPA")
+        # Part-IV-s24 should be covered by at least INTENT_RECEIVED
+        assert "INTENT_RECEIVED" in coverage.get("Part-IV-s24", [])
+
+    def test_japan_appi_covered_by_key_events(self):
+        mapper = EvidenceMapper()
+        coverage = mapper.get_framework_coverage("JAPAN-APPI")
+        # Art-23 should be covered by at least INTENT_RECEIVED
+        assert "INTENT_RECEIVED" in coverage.get("Art-23", [])

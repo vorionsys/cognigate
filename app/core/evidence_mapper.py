@@ -17,6 +17,8 @@ Supported frameworks and their coverage:
     NIST AI RMF 1.0      — Govern, Map, Measure, Manage functions
     CMMC 2.0             — Access, audit, identity, incident, system integrity
     GDPR                 — Lawfulness, transparency, accountability, security
+    Singapore PDPA       — Protection, retention, accuracy, breach notification
+    Japan APPI           — Third-party provision, security measures, supervision
 
 Proof event types mapped:
 
@@ -57,6 +59,8 @@ _RETENTION_YEARS: dict[str, int] = {
     "NIST-AI-RMF": 7,
     "CMMC": 7,
     "GDPR": 6,
+    "SINGAPORE-PDPA": 7,
+    "JAPAN-APPI": 7,
 }
 
 
@@ -186,6 +190,25 @@ EVIDENCE_MAP: dict[str, dict[str, list[dict]]] = {
              "desc": "Records of processing: intent submission recorded in processing log",
              "status": "satisfies"},
         ],
+        "SINGAPORE-PDPA": [
+            {"control": "Part-IV-s24", "type": "log", "category": "data_protection",
+             "desc": "Protection obligation: intent submission recorded with proof chain integrity",
+             "status": "satisfies"},
+            {"control": "Part-IV-s26", "type": "log", "category": "retention",
+             "desc": "Retention limitation: intent record subject to 7-year retention policy",
+             "status": "satisfies"},
+        ],
+        "JAPAN-APPI": [
+            {"control": "Art-23", "type": "log", "category": "third_party",
+             "desc": "Third-party provision: entity management logging for intent submission",
+             "status": "satisfies"},
+            {"control": "Art-25", "type": "log", "category": "security",
+             "desc": "Security measures: intent recorded in proof chain with crypto verification",
+             "status": "satisfies"},
+            {"control": "Art-26", "type": "log", "category": "supervision",
+             "desc": "Supervision: admin monitoring endpoint captures intent for oversight",
+             "status": "partially_satisfies"},
+        ],
     },
 
     # ======================================================================
@@ -307,6 +330,22 @@ EVIDENCE_MAP: dict[str, dict[str, list[dict]]] = {
             {"control": "Article-32", "type": "attestation", "category": "system_integrity",
              "desc": "Security of processing: access control decision enforced",
              "status": "partially_satisfies"},
+        ],
+        "SINGAPORE-PDPA": [
+            {"control": "Part-IV-s24", "type": "attestation", "category": "data_protection",
+             "desc": "Protection obligation: enforcement decision protects personal data integrity",
+             "status": "satisfies"},
+            {"control": "Part-V-s28", "type": "attestation", "category": "accuracy",
+             "desc": "Accuracy obligation: decision validated against current policy state",
+             "status": "partially_satisfies"},
+        ],
+        "JAPAN-APPI": [
+            {"control": "Art-23", "type": "attestation", "category": "third_party",
+             "desc": "Third-party provision: authorization decision logged for entity actions",
+             "status": "satisfies"},
+            {"control": "Art-25", "type": "attestation", "category": "security",
+             "desc": "Security measures: enforcement decision secured via proof chain and crypto",
+             "status": "satisfies"},
         ],
     },
 
@@ -541,6 +580,28 @@ EVIDENCE_MAP: dict[str, dict[str, list[dict]]] = {
             {"control": "Article-32", "type": "attestation", "category": "system_integrity",
              "desc": "Security of processing: execution integrity verified via hash chain",
              "status": "partially_satisfies"},
+        ],
+        "SINGAPORE-PDPA": [
+            {"control": "Part-IV-s24", "type": "attestation", "category": "data_protection",
+             "desc": "Protection obligation: execution completed with proof chain integrity verified",
+             "status": "satisfies"},
+            {"control": "Part-IV-s26", "type": "log", "category": "retention",
+             "desc": "Retention limitation: execution record retained per 7-year policy",
+             "status": "satisfies"},
+            {"control": "Part-V-s26C", "type": "log", "category": "breach_notification",
+             "desc": "Data breach notification: successful execution — no breach condition",
+             "status": "supports"},
+        ],
+        "JAPAN-APPI": [
+            {"control": "Art-23", "type": "log", "category": "third_party",
+             "desc": "Third-party provision: execution completion logged for entity audit trail",
+             "status": "satisfies"},
+            {"control": "Art-25", "type": "attestation", "category": "security",
+             "desc": "Security measures: execution integrity verified via proof chain and crypto",
+             "status": "satisfies"},
+            {"control": "Art-26", "type": "log", "category": "supervision",
+             "desc": "Supervision: execution completion available at admin monitoring endpoints",
+             "status": "satisfies"},
         ],
     },
 
