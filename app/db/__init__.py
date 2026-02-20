@@ -4,11 +4,14 @@ Database module for Cognigate.
 Provides SQLAlchemy async database support for:
 - Proof record persistence
 - Chain state tracking
+- Compliance evidence persistence
 """
 
 from .database import init_db, close_db, get_session, Base
 from .models import ProofRecordDB, ChainStateDB
+from .evidence_models import ControlEvidenceDB, ControlHealthDB, ComplianceSnapshotDB
 from .proof_repository import ProofRepository, GENESIS_HASH
+from .evidence_repository import EvidenceRepository
 
 __all__ = [
     # Database lifecycle
@@ -19,7 +22,12 @@ __all__ = [
     # Models
     "ProofRecordDB",
     "ChainStateDB",
+    # Evidence models
+    "ControlEvidenceDB",
+    "ControlHealthDB",
+    "ComplianceSnapshotDB",
     # Repositories
     "ProofRepository",
     "GENESIS_HASH",
+    "EvidenceRepository",
 ]

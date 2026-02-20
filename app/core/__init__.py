@@ -53,6 +53,8 @@ from .policy_engine import (
     EvaluationContext,
     Severity,
 )
+from .evidence_mapper import EvidenceMapper
+from .evidence_hook import EvidenceHook, evidence_hook, on_proof_created
 
 __all__ = [
     # Tripwires
@@ -95,4 +97,9 @@ __all__ = [
     "Constraint",
     "EvaluationContext",
     "Severity",
+    # Evidence Layer
+    "EvidenceMapper",
+    "EvidenceHook",
+    "evidence_hook",
+    "on_proof_created",
 ]
