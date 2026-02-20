@@ -53,9 +53,9 @@ async def create_proof_record(
     """
     repo = ProofRepository(session)
 
-    # Get current chain state from database
-    last_hash = await repo.get_last_hash()
-    chain_length = await repo.get_chain_length()
+    # Atomically read chain state under row-level lock (PostgreSQL) to prevent
+    # concurrent appends from reading the same chain position.
+    last_hash, chain_length = await repo.get_chain_state_for_append()
 
     inputs_hash = calculate_hash(inputs)
     outputs_hash = calculate_hash(outputs)

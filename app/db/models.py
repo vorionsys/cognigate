@@ -5,7 +5,7 @@ SQLAlchemy models for Cognigate database tables.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -18,13 +18,16 @@ class ProofRecordDB(Base):
     Maps to the proof_records table.
     """
     __tablename__ = "proof_records"
+    __table_args__ = (
+        UniqueConstraint('chain_position', name='uq_proof_chain_position'),
+    )
 
     # Primary key
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     proof_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
 
     # Chain position
-    chain_position: Mapped[int] = mapped_column(Integer, index=True)
+    chain_position: Mapped[int] = mapped_column(Integer, unique=True, index=True)
 
     # References
     intent_id: Mapped[str] = mapped_column(String(64), index=True)
@@ -64,6 +67,7 @@ class ChainStateDB(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     last_hash: Mapped[str] = mapped_column(String(64))
     chain_length: Mapped[int] = mapped_column(Integer, default=0)
+    version: Mapped[int] = mapped_column(Integer, default=1)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,

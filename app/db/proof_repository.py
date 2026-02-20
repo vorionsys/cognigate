@@ -29,6 +29,42 @@ class ProofRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def _get_dialect_name(self) -> str:
+        """Get the database dialect name (e.g., 'postgresql', 'sqlite')."""
+        bind = self.session.get_bind()
+        return bind.dialect.name
+
+    async def get_chain_state_for_append(self) -> tuple[str, int]:
+        """
+        Atomically read chain state with row-level lock for append operations.
+
+        Uses SELECT FOR UPDATE on PostgreSQL to prevent concurrent chain appends.
+        Falls back to a plain SELECT on SQLite (which is single-writer anyway).
+
+        Returns:
+            Tuple of (last_hash, chain_length).
+        """
+        dialect = await self._get_dialect_name()
+
+        if dialect == "sqlite":
+            # SQLite uses database-level locking (single writer), so
+            # SELECT FOR UPDATE is unnecessary and unsupported.
+            stmt = select(ChainStateDB).where(ChainStateDB.id == 1)
+        else:
+            # PostgreSQL: acquire row-level lock to serialize chain appends.
+            stmt = (
+                select(ChainStateDB)
+                .where(ChainStateDB.id == 1)
+                .with_for_update()
+            )
+
+        result = await self.session.execute(stmt)
+        state = result.scalar_one_or_none()
+
+        if state:
+            return state.last_hash, state.chain_length
+        return GENESIS_HASH, 0
+
     async def get_last_hash(self) -> str:
         """Get the hash of the last record in the chain."""
         result = await self.session.execute(
@@ -52,7 +88,16 @@ class ProofRepository:
         return 0
 
     async def _update_chain_state(self, last_hash: str, chain_length: int) -> None:
-        """Update the chain state after adding a record."""
+        """
+        Update the chain state after adding a record.
+
+        When called within a transaction that already holds the FOR UPDATE lock
+        (via get_chain_state_for_append), the row is already locked and this
+        update is safe from concurrent modification.
+
+        Increments the version column for optimistic concurrency detection
+        as defense-in-depth.
+        """
         result = await self.session.execute(
             select(ChainStateDB).where(ChainStateDB.id == 1)
         )
@@ -61,12 +106,14 @@ class ProofRepository:
         if state:
             state.last_hash = last_hash
             state.chain_length = chain_length
+            state.version = state.version + 1
             state.updated_at = datetime.utcnow()
         else:
             state = ChainStateDB(
                 id=1,
                 last_hash=last_hash,
-                chain_length=chain_length
+                chain_length=chain_length,
+                version=1,
             )
             self.session.add(state)
 
