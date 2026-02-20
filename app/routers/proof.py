@@ -13,6 +13,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import verify_api_key
 from app.models.proof import ProofRecord, ProofQuery, ProofVerification, ProofStats
 from app.models.enforce import EnforceResponse
 from app.db import get_session, ProofRepository
@@ -119,6 +120,7 @@ async def create_proof_record(
 @router.post("/proof", response_model=ProofRecord)
 async def create_proof(
     verdict: EnforceResponse,
+    _: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session),
 ) -> ProofRecord:
     """
@@ -152,6 +154,7 @@ async def create_proof(
 
 @router.get("/proof/stats", response_model=ProofStats)
 async def get_proof_stats(
+    _: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session),
 ) -> ProofStats:
     """
@@ -177,6 +180,7 @@ async def get_proof_stats(
 @router.get("/proof/{proof_id}", response_model=ProofRecord)
 async def get_proof(
     proof_id: str,
+    _: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session),
 ) -> ProofRecord:
     """
@@ -194,6 +198,7 @@ async def get_proof(
 @router.post("/proof/query", response_model=list[ProofRecord])
 async def query_proofs(
     query: ProofQuery,
+    _: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session),
 ) -> list[ProofRecord]:
     """
@@ -206,6 +211,7 @@ async def query_proofs(
 @router.get("/proof/{proof_id}/verify", response_model=ProofVerification)
 async def verify_proof(
     proof_id: str,
+    _: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session),
 ) -> ProofVerification:
     """

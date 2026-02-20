@@ -12,8 +12,9 @@ Security Layers Applied:
 
 import time
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.auth import verify_api_key
 from app.models.enforce import EnforceRequest, EnforceResponse, PolicyViolation, RigorMode
 from app.core.velocity import check_velocity, record_action
 from app.core.circuit_breaker import circuit_breaker
@@ -41,21 +42,20 @@ DEFAULT_RIGOR_BY_TRUST = {
 }
 
 
-def determine_rigor_mode(trust_level: int, requested_mode: RigorMode | None) -> RigorMode:
+def determine_rigor_mode(trust_level: int, requested_mode: RigorMode | None = None) -> RigorMode:
     """
-    Determine enforcement rigor mode.
+    Determine enforcement rigor mode from trust level.
 
-    Args:
-        trust_level: Entity's trust level (0-7)
-        requested_mode: Explicitly requested mode (optional)
-
-    Returns:
-        RigorMode to use for enforcement
+    Rigor mode is ALWAYS server-determined based on trust level.
+    Client-requested modes are logged but not honored (server-authoritative).
     """
     if requested_mode:
-        return requested_mode
-
-    # Auto-select based on trust level
+        import structlog
+        structlog.get_logger().info(
+            "rigor_mode_override_ignored",
+            requested=requested_mode.value,
+            server_determined=DEFAULT_RIGOR_BY_TRUST.get(trust_level, RigorMode.STANDARD).value,
+        )
     return DEFAULT_RIGOR_BY_TRUST.get(trust_level, RigorMode.STANDARD)
 
 
@@ -99,7 +99,7 @@ def filter_policies_by_rigor(
 
 
 @router.post("/enforce", response_model=EnforceResponse)
-async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
+async def enforce_policies(request: EnforceRequest, _: str = Depends(verify_api_key)) -> EnforceResponse:
     """
     Validate a plan against BASIS policies.
 
@@ -350,7 +350,7 @@ async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
 
 
 @router.get("/enforce/policies")
-async def list_policies() -> dict:
+async def list_policies(_: str = Depends(verify_api_key)) -> dict:
     """
     List available BASIS policies.
     """
@@ -370,7 +370,7 @@ async def list_policies() -> dict:
 
 
 @router.get("/enforce/policies/{policy_id}")
-async def get_policy(policy_id: str) -> dict:
+async def get_policy(policy_id: str, _: str = Depends(verify_api_key)) -> dict:
     """
     Get details of a specific policy.
     """

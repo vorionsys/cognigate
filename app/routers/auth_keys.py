@@ -10,8 +10,10 @@ import hashlib
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from app.core.auth import verify_api_key
 
 router = APIRouter()
 
@@ -46,7 +48,7 @@ def _hash_key(raw_key: str) -> str:
 # =============================================================================
 
 @router.post("/auth/keys", status_code=201, summary="Create API key")
-async def create_key(body: CreateKeyRequest) -> dict:
+async def create_key(body: CreateKeyRequest, _: str = Depends(verify_api_key)) -> dict:
     """
     Create a new API key. The raw key is returned **only once** in this response.
     Store it securely — it cannot be retrieved again.
@@ -75,7 +77,7 @@ async def create_key(body: CreateKeyRequest) -> dict:
 
 
 @router.get("/auth/keys", summary="List API keys")
-async def list_keys() -> dict:
+async def list_keys(_: str = Depends(verify_api_key)) -> dict:
     """
     List all API keys. Raw keys are never shown — only metadata.
     """
@@ -93,7 +95,7 @@ async def list_keys() -> dict:
 
 
 @router.delete("/auth/keys/{key_id}", status_code=204, summary="Delete API key")
-async def delete_key(key_id: str) -> None:
+async def delete_key(key_id: str, _: str = Depends(verify_api_key)) -> None:
     """
     Delete (revoke) an API key. This is irreversible.
     """

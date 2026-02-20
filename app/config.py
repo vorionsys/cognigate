@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     secret_key: str = "CHANGE_ME_IN_PRODUCTION"
     access_token_expire_minutes: int = 30
     admin_api_key: str = "CHANGE_ME_IN_PRODUCTION"  # API key for admin endpoints
+    api_key: str = "CHANGE_ME_IN_PRODUCTION"  # API key for pipeline endpoints
 
     # Trust Engine
     default_trust_level: int = 1
@@ -88,6 +89,31 @@ class Settings(BaseSettings):
     cache_ttl_policy_results: int = 60        # Policy evaluation results
     cache_ttl_trust_scores: int = 300         # Trust scores
     cache_ttl_velocity_state: int = 0         # Velocity state (no expiry)
+
+    def validate_secrets(self) -> list[str]:
+        """
+        Validate that default/placeholder secrets are not used in production.
+
+        Returns list of validation errors. Empty list means all secrets are valid.
+        Raises RuntimeError in production if default secrets are detected.
+        """
+        errors = []
+        _FORBIDDEN_DEFAULTS = {"CHANGE_ME_IN_PRODUCTION", "", "changeme", "secret", "password"}
+
+        if self.secret_key in _FORBIDDEN_DEFAULTS:
+            errors.append("secret_key is using a default/placeholder value")
+        if self.admin_api_key in _FORBIDDEN_DEFAULTS:
+            errors.append("admin_api_key is using a default/placeholder value")
+        if self.api_key in _FORBIDDEN_DEFAULTS:
+            errors.append("api_key is using a default/placeholder value")
+
+        if errors and self.environment == "production":
+            raise RuntimeError(
+                f"FATAL: Default secrets detected in production environment. "
+                f"Refusing to start. Issues: {'; '.join(errors)}"
+            )
+
+        return errors
 
 
 @lru_cache

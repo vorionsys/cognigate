@@ -1,7 +1,7 @@
 """
-Authentication for Cognigate Admin Endpoints.
+Authentication for Cognigate Endpoints.
 
-Provides API key authentication for admin operations.
+Provides API key authentication for admin and pipeline operations.
 Production deployments should use strong, rotated API keys.
 """
 
@@ -16,11 +16,18 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# API Key header configuration
+# API Key header configuration — Admin endpoints
 api_key_header = APIKeyHeader(
     name="X-Admin-Key",
     auto_error=False,
     description="Admin API key for protected endpoints"
+)
+
+# API Key header configuration — Pipeline endpoints
+pipeline_api_key_header = APIKeyHeader(
+    name="X-API-Key",
+    auto_error=False,
+    description="API key for pipeline endpoints"
 )
 
 
@@ -90,6 +97,33 @@ async def optional_admin_key(
     if not secrets.compare_digest(api_key, settings.admin_api_key):
         logger.warning("admin_auth_invalid_key")
         raise ForbiddenError("Invalid admin API key")
+
+    return api_key
+
+
+async def verify_api_key(
+    api_key: Optional[str] = Security(pipeline_api_key_header),
+) -> str:
+    """
+    Verify the pipeline API key (X-API-Key header).
+
+    This dependency should be used on all pipeline endpoints
+    (intent, enforce, proof, trust, auth_keys).
+    Raises 401 if no key provided, 403 if key is invalid.
+
+    Returns:
+        The validated API key (for logging purposes)
+    """
+    settings = get_settings()
+
+    if not api_key:
+        logger.warning("pipeline_auth_missing_key")
+        raise AuthError("API key required")
+
+    # Compare using constant-time comparison to prevent timing attacks
+    if not secrets.compare_digest(api_key, settings.api_key):
+        logger.warning("pipeline_auth_invalid_key")
+        raise ForbiddenError("Invalid API key")
 
     return api_key
 

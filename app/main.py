@@ -4,6 +4,7 @@ Cognigate Engine - Main FastAPI Application
 The open-source enforcement engine for the BASIS standard.
 """
 
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -53,6 +54,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         version=settings.app_version,
         environment=settings.environment,
     )
+    # Validate secrets — FATAL in production if defaults are used
+    try:
+        secret_errors = settings.validate_secrets()
+        if secret_errors:
+            logger.warning(
+                "default_secrets_detected",
+                errors=secret_errors,
+                environment=settings.environment,
+                action="blocked_in_production" if settings.environment == "production" else "warning_only",
+            )
+    except RuntimeError as e:
+        logger.critical("startup_blocked_default_secrets", error=str(e))
+        raise
     # Each subsystem initializes independently; failures are logged but don't
     # prevent the rest of the application from starting.
     try:
@@ -158,12 +172,17 @@ Powered by **VORION** - The Steward of Safe Autonomous Systems.
     lifespan=lifespan,
 )
 
-# CORS middleware
+# CORS middleware — restrict origins in production
+_cors_origins = (
+    ["*"] if settings.environment == "development"
+    else [origin.strip() for origin in os.environ.get("CORS_ORIGINS", "").split(",") if origin.strip()]
+    or ["https://cognigate.dev", "https://vorion.org"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

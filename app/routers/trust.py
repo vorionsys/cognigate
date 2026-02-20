@@ -8,9 +8,10 @@ Manages trust admission, scoring, signals, and revocation.
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.core.auth import verify_api_key
 from app.constants_bridge import (
     TIER_THRESHOLDS,
     TrustTier,
@@ -67,7 +68,7 @@ SIGNAL_WEIGHTS = {
 # =============================================================================
 
 @router.post("/trust/admit", summary="Admit agent (establish Gate Trust)")
-async def admit_agent(body: AdmitRequest) -> dict:
+async def admit_agent(body: AdmitRequest, _: str = Depends(verify_api_key)) -> dict:
     """
     Admit an agent into the trust system, establishing initial Gate Trust.
 
@@ -132,7 +133,7 @@ async def get_tiers() -> dict:
 
 
 @router.get("/trust/{agent_id}", summary="Get current trust status")
-async def get_trust(agent_id: str) -> dict:
+async def get_trust(agent_id: str, _: str = Depends(verify_api_key)) -> dict:
     """
     Get the current trust score, tier, and observation ceiling for an agent.
     """
@@ -158,7 +159,7 @@ async def get_trust(agent_id: str) -> dict:
 
 
 @router.post("/trust/{agent_id}/signal", summary="Record trust signal")
-async def record_signal(agent_id: str, body: SignalRequest) -> dict:
+async def record_signal(agent_id: str, body: SignalRequest, _: str = Depends(verify_api_key)) -> dict:
     """
     Record a trust signal for an agent (success, failure, violation, or neutral).
 
@@ -214,7 +215,7 @@ async def record_signal(agent_id: str, body: SignalRequest) -> dict:
 
 
 @router.post("/trust/{agent_id}/revoke", summary="Revoke agent trust")
-async def revoke_trust(agent_id: str, body: RevokeRequest) -> dict:
+async def revoke_trust(agent_id: str, body: RevokeRequest, _: str = Depends(verify_api_key)) -> dict:
     """
     Revoke an agent's trust, setting its score to 0 and marking it as revoked.
     """
@@ -234,7 +235,7 @@ async def revoke_trust(agent_id: str, body: RevokeRequest) -> dict:
 
 
 @router.get("/trust/{agent_id}/history", summary="Trust signal history")
-async def get_trust_history(agent_id: str, limit: int = 50) -> dict:
+async def get_trust_history(agent_id: str, limit: int = 50, _: str = Depends(verify_api_key)) -> dict:
     """
     Get the trust signal history for an agent.
     """

@@ -12,8 +12,9 @@ Security Layers:
 
 import time
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.auth import verify_api_key
 from app.models.intent import IntentRequest, IntentResponse, StructuredPlan
 from app.models.common import TrustLevel
 from app.models.critic import CriticRequest
@@ -143,7 +144,7 @@ def analyze_intent(goal: str, context: dict) -> StructuredPlan:
 
 
 @router.post("/intent", response_model=IntentResponse)
-async def normalize_intent(request: IntentRequest) -> IntentResponse:
+async def normalize_intent(request: IntentRequest, _: str = Depends(verify_api_key)) -> IntentResponse:
     """
     Normalize an intent into a structured plan.
 
@@ -209,10 +210,8 @@ async def normalize_intent(request: IntentRequest) -> IntentResponse:
         request.entity_id, (200, 1)  # Default to Provisional
     )
 
-    # Override trust if authorized and provided
-    if request.trust_level is not None:
-        # In production, verify authorization to override
-        trust_level = request.trust_level
+    # Client-side trust_level overrides are NOT honored — trust is server-authoritative
+    # The trust_level field in the request is accepted but ignored for compatibility
 
     try:
         # Analyze the intent (includes PARANOIA MODE checks)
@@ -307,7 +306,7 @@ async def normalize_intent(request: IntentRequest) -> IntentResponse:
 
 
 @router.get("/intent/{intent_id}")
-async def get_intent(intent_id: str) -> dict:
+async def get_intent(intent_id: str, _: str = Depends(verify_api_key)) -> dict:
     """
     Retrieve a previously processed intent by ID.
 
