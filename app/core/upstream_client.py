@@ -1,7 +1,7 @@
 """
 Upstream Client for Gateway Bridge
 
-HTTP client (httpx) for forwarding requests to AgentAnchor API.
+HTTP client (httpx) for forwarding requests to Vorion API.
 Includes circuit breaker, retry logic, and auth propagation.
 """
 
@@ -76,7 +76,7 @@ async def forward_request(
     timeout: float | None = None,
 ) -> dict[str, Any]:
     """
-    Forward a request to the AgentAnchor upstream API.
+    Forward a request to the Vorion upstream API.
 
     Returns a dict with:
     - status: HTTP status code
@@ -95,7 +95,7 @@ async def forward_request(
             "headers": {},
         }
 
-    url = f"{settings.agentanchor_api_url}{path}"
+    url = f"{settings.vorion_api_url}{path}"
     req_headers = dict(headers or {})
 
     # Propagate API key

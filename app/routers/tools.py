@@ -1207,9 +1207,8 @@ async def theme_preview():
         <h3>How to Switch Themes</h3>
         <ol>
             <li><strong>cognigate.dev</strong> — Edit <code>app/theme.py</code>, change <code>ACTIVE_THEME = "midnight_cyan"</code></li>
-            <li><strong>agentanchorai.com</strong> — Edit <code>globals.css</code>, swap the CSS variable values in <code>:root</code></li>
             <li><strong>vorion.org</strong> — Edit <code>globals.css</code>, swap the CSS variable values in <code>:root</code></li>
-            <li>Deploy all three sites. That's it.</li>
+            <li>Deploy both sites. That's it.</li>
         </ol>
         <p style="color:var(--text-tertiary);font-size:0.8rem;margin-top:0.75rem;">
             Source of truth: <code>packages/shared-constants/src/themes.ts</code> (TypeScript) and <code>app/theme.py</code> (Python)

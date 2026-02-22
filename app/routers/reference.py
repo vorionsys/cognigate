@@ -240,14 +240,14 @@ async def list_products(organization: str | None = None) -> dict:
     Returns the full Vorion ecosystem product catalog.
 
     Optional filter:
-    - **organization**: Filter by organization (vorion, agentAnchor)
+    - **organization**: Filter by organization (vorion)
     """
     if organization is not None:
         products = ALL_PRODUCTS.get(organization)
         if products is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"Organization not found: {organization}. Use 'vorion' or 'agentAnchor'.",
+                detail=f"Organization not found: {organization}. Use 'vorion'.",
             )
         return {"products": products, "organization": organization}
 

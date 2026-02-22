@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     log_format: str = "json"
 
     # Gateway / Upstream
-    agentanchor_api_url: str = "https://app.agentanchorai.com/api"
+    vorion_api_url: str = "https://app.vorion.org/api"
     gateway_timeout_ms: int = 30000
     gateway_circuit_breaker_threshold: int = 5
 

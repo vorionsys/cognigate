@@ -2,7 +2,7 @@
 Cognigate Constants Bridge
 
 Python mirror of @vorionsys/shared-constants — single source of truth for
-the entire Vorion/AgentAnchor ecosystem.
+the entire Vorion ecosystem.
 
 Translates 7 TypeScript constant modules into Python dictionaries:
 - Tiers (8-tier trust model, T0-T7)
@@ -857,7 +857,7 @@ API_VERSIONS: dict[str, dict[str, Any]] = {
             "fullVersion": "1.0.0",
             "releaseDate": "2026-02-01",
             "status": VersionStatus.STABLE,
-            "changelogUrl": "https://trust.agentanchorai.com/changelog/v1",
+            "changelogUrl": "https://trust.vorion.org/changelog/v1",
         },
     },
     "logic": {
@@ -866,7 +866,7 @@ API_VERSIONS: dict[str, dict[str, Any]] = {
             "fullVersion": "1.0.0",
             "releaseDate": "2026-02-01",
             "status": VersionStatus.PREVIEW,
-            "changelogUrl": "https://logic.agentanchorai.com/changelog/v1",
+            "changelogUrl": "https://logic.vorion.org/changelog/v1",
         },
     },
     "basis": {
@@ -1003,7 +1003,7 @@ VORION_PRODUCTS: dict[str, dict[str, Any]] = {
     },
 }
 
-AGENTANCHOR_PRODUCTS: dict[str, dict[str, Any]] = {
+VORION_COMMERCIAL_PRODUCTS: dict[str, dict[str, Any]] = {
     "cognigate": {
         "id": "cognigate",
         "name": "Cognigate",
@@ -1013,44 +1013,44 @@ AGENTANCHOR_PRODUCTS: dict[str, dict[str, Any]] = {
         "url": "https://cognigate.dev",
         "docsUrl": "https://cognigate.dev/docs",
         "npmPackage": "@vorionsys/cognigate",
-        "organization": "agentanchor",
+        "organization": "vorion",
         "version": "1.0.0",
     },
     "trust": {
         "id": "trust",
-        "name": "Agent Anchor Trust",
+        "name": "Vorion Trust",
         "description": "Trust verification and certification platform for AI agents",
         "category": ProductCategory.COMMERCIAL,
         "status": ProductStatus.GA,
-        "url": "https://trust.agentanchorai.com",
-        "docsUrl": "https://trust.agentanchorai.com/docs",
-        "organization": "agentanchor",
+        "url": "https://trust.vorion.org",
+        "docsUrl": "https://trust.vorion.org/docs",
+        "organization": "vorion",
     },
     "logic": {
         "id": "logic",
-        "name": "Agent Anchor Logic",
+        "name": "Vorion Logic",
         "description": "Policy engine and governance logic for enterprise AI",
         "category": ProductCategory.COMMERCIAL,
         "status": ProductStatus.BETA,
-        "url": "https://logic.agentanchorai.com",
-        "docsUrl": "https://logic.agentanchorai.com/docs",
-        "organization": "agentanchor",
+        "url": "https://logic.vorion.org",
+        "docsUrl": "https://logic.vorion.org/docs",
+        "organization": "vorion",
     },
     "platform": {
         "id": "platform",
-        "name": "Agent Anchor Platform",
+        "name": "Vorion Platform",
         "description": "Enterprise AI governance dashboard and management console",
         "category": ProductCategory.COMMERCIAL,
         "status": ProductStatus.GA,
-        "url": "https://agentanchorai.com",
-        "docsUrl": "https://agentanchorai.com/docs",
-        "organization": "agentanchor",
+        "url": "https://vorion.org",
+        "docsUrl": "https://vorion.org/docs",
+        "organization": "vorion",
     },
 }
 
 ALL_PRODUCTS: dict[str, dict[str, dict[str, Any]]] = {
     "vorion": VORION_PRODUCTS,
-    "agentAnchor": AGENTANCHOR_PRODUCTS,
+    "vorionCommercial": VORION_COMMERCIAL_PRODUCTS,
 }
 
 # =============================================================================
@@ -1068,11 +1068,11 @@ VORION_DOMAINS: dict[str, str] = {
     "community": "https://community.vorion.org",
 }
 
-AGENTANCHOR_DOMAINS: dict[str, str] = {
-    "main": "https://agentanchorai.com",
-    "trust": "https://trust.agentanchorai.com",
-    "logic": "https://logic.agentanchorai.com",
-    "status": "https://status.agentanchorai.com",
+VORION_COMMERCIAL_DOMAINS: dict[str, str] = {
+    "main": "https://vorion.org",
+    "trust": "https://trust.vorion.org",
+    "logic": "https://logic.vorion.org",
+    "status": "https://status.vorion.org",
 }
 
 COGNIGATE_DOMAINS: dict[str, str] = {
@@ -1085,18 +1085,18 @@ API_ENDPOINTS: dict[str, dict[str, str]] = {
         "production": "https://cognigate.dev/v1",
         "staging": "https://staging.cognigate.dev/v1",
     },
-    "agentAnchor": {
-        "production": "https://api.agentanchorai.com/v1",
-        "staging": "https://staging-api.agentanchorai.com/v1",
-        "sandbox": "https://sandbox.agentanchorai.com/v1",
+    "vorionApi": {
+        "production": "https://api.vorion.org/v1",
+        "staging": "https://staging-api.vorion.org/v1",
+        "sandbox": "https://sandbox.vorion.org/v1",
     },
     "trust": {
-        "production": "https://trust.agentanchorai.com/v1",
-        "staging": "https://staging.trust.agentanchorai.com/v1",
+        "production": "https://trust.vorion.org/v1",
+        "staging": "https://staging.trust.vorion.org/v1",
     },
     "logic": {
-        "production": "https://logic.agentanchorai.com/v1",
-        "staging": "https://staging.logic.agentanchorai.com/v1",
+        "production": "https://logic.vorion.org/v1",
+        "staging": "https://staging.logic.vorion.org/v1",
     },
 }
 
@@ -1105,8 +1105,8 @@ GITHUB: dict[str, dict[str, str]] = {
         "org": "https://github.com/voriongit",
         "mainRepo": "https://github.com/voriongit/vorion",
     },
-    "agentAnchor": {
-        "org": "https://github.com/agentanchorai",
+    "vorionSys": {
+        "org": "https://github.com/vorionsys",
     },
 }
 
@@ -1119,16 +1119,16 @@ NPM_PACKAGES: dict[str, dict[str, str]] = {
         "cognigate": "@vorionsys/cognigate",
         "sharedConstants": "@vorionsys/shared-constants",
     },
-    "agentAnchor": {
-        "sdk": "@agentanchor/sdk",
-        "trust": "@agentanchor/trust",
-        "logic": "@agentanchor/logic",
+    "vorionSys": {
+        "sdk": "@vorionsys/sdk",
+        "trust": "@vorionsys/trust",
+        "logic": "@vorionsys/logic",
     },
 }
 
 ALL_DOMAINS: dict[str, Any] = {
     "vorion": VORION_DOMAINS,
-    "agentAnchor": AGENTANCHOR_DOMAINS,
+    "vorionCommercial": VORION_COMMERCIAL_DOMAINS,
     "cognigate": COGNIGATE_DOMAINS,
     "api": API_ENDPOINTS,
     "github": GITHUB,

@@ -1,11 +1,11 @@
 """
 Gateway Router
 
-Proxies requests to the AgentAnchor API, making cognigate.dev the single
+Proxies requests to the Vorion API, making cognigate.dev the single
 developer entry point for the entire governance platform.
 
 Routes are grouped by domain:
-- /v1/gateway/compliance/*    -> AgentAnchor compliance routes
+- /v1/gateway/compliance/*    -> Vorion compliance routes
 - /v1/gateway/council/*       -> Council governance
 - /v1/gateway/observer/*      -> Behavioral monitoring
 - /v1/gateway/truth-chain/*   -> Immutable audit trail
@@ -38,7 +38,7 @@ GATEWAY_DOMAINS = [
 @router.get("/gateway/status", summary="Gateway health and circuit breaker status")
 async def gateway_status() -> dict:
     """
-    Check the gateway's connection status to the AgentAnchor upstream API,
+    Check the gateway's connection status to the Vorion upstream API,
     including circuit breaker state.
     """
     cb = get_circuit_breaker_status()
@@ -52,11 +52,11 @@ async def gateway_status() -> dict:
 @router.api_route(
     "/gateway/{domain}/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    summary="Proxy to AgentAnchor API",
+    summary="Proxy to Vorion API",
 )
 async def gateway_proxy(domain: str, path: str, request: Request) -> JSONResponse:
     """
-    Forward requests to the AgentAnchor upstream API.
+    Forward requests to the Vorion upstream API.
 
     The domain must be one of: compliance, council, observer, truth-chain,
     academy, orchestrator, webhooks, dashboard.

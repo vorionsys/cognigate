@@ -81,8 +81,8 @@ async def check_intent(goal: str, entity_id: str):
 |-----------|-------------|
 | [vorion.org](https://vorion.org) | AI Governance Infrastructure |
 | [atsf-core](https://npmjs.com/package/@vorionsys/atsf-core) | TypeScript SDK |
-| [Aurais](https://aurais.agentanchorai.com) | Live Demo Platform |
-| [AgentAnchor](https://agentanchorai.com) | Enterprise Platform |
+| [Aurais](https://aurais.vorion.org) | Live Demo Platform |
+| [Vorion](https://vorion.org) | Enterprise Platform |
 
 ## License
 

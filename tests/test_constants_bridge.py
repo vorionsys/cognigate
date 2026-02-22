@@ -21,7 +21,7 @@ from app.constants_bridge import (
     RATE_LIMITS,
     TIER_QUOTAS,
     VORION_DOMAINS,
-    AGENTANCHOR_DOMAINS,
+    VORION_COMMERCIAL_DOMAINS,
     COGNIGATE_DOMAINS,
     API_VERSIONS,
     CURRENT_VERSIONS,
@@ -223,9 +223,9 @@ class TestDomains:
         assert "main" in VORION_DOMAINS
         assert "vorion.org" in VORION_DOMAINS["main"]
 
-    def test_agentanchor_domains(self):
-        assert "main" in AGENTANCHOR_DOMAINS
-        assert "agentanchorai.com" in AGENTANCHOR_DOMAINS["main"]
+    def test_vorion_commercial_domains(self):
+        assert "main" in VORION_COMMERCIAL_DOMAINS
+        assert "vorion.org" in VORION_COMMERCIAL_DOMAINS["main"]
 
     def test_cognigate_domains(self):
         assert "main" in COGNIGATE_DOMAINS

@@ -147,10 +147,10 @@ The open-source **enforcement engine** for the BASIS standard. Stateless policy 
 - **Products** (`/v1/reference/products`) - Ecosystem product catalog
 - **Domains** (`/v1/reference/domains`) - Domain registry
 
-### Gateway (Proxy to AgentAnchor)
+### Gateway (Proxy to Vorion)
 
 - **Gateway Status** (`/v1/gateway/status`) - Connection health check
-- **Gateway Proxy** (`/v1/gateway/{domain}/*`) - Forward to AgentAnchor API
+- **Gateway Proxy** (`/v1/gateway/{domain}/*`) - Forward to Vorion API
   - Domains: compliance, council, observer, truth-chain, academy, orchestrator, webhooks, dashboard
 
 ### The Stack
@@ -472,8 +472,8 @@ footer a:hover {{ color: var(--accent); }}
             <p>The PROOF layer logs every intent, enforcement decision, and outcome with cryptographic signatures. Tamper-evident and compliance-ready. Optionally anchored to blockchain via the CHAIN extension for independent verification.</p>
         </div>
         <div class="feat">
-            <h3>Gateway to AgentAnchor</h3>
-            <p>Single API surface that proxies to the full AgentAnchor platform &mdash; compliance, council, observer, truth-chain, academy, and more.</p>
+            <h3>Gateway to Vorion</h3>
+            <p>Single API surface that proxies to the full Vorion platform &mdash; compliance, council, observer, truth-chain, academy, and more.</p>
         </div>
     </div>
 </section>
