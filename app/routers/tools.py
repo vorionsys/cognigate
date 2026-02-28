@@ -561,12 +561,12 @@ curl https://cognigate.dev/v1/reference/tiers</code></pre>
         <div class="card">
             <h2 style="margin-top:0;">Go</h2>
             <p style="color:#888;font-size:0.85rem;">Go client library</p>
-            <pre><code>go get github.com/voriongit/cognigate-go</code></pre>
+            <pre><code>go get github.com/vorionsys/cognigate-go</code></pre>
             <pre><code>package main
 
 import (
     "context"
-    cognigate "github.com/voriongit/cognigate-go"
+    cognigate "github.com/vorionsys/cognigate-go"
 )
 
 func main() {{
@@ -615,7 +615,7 @@ func main() {{
             <p style="color:#888;font-size:0.85rem;margin-top:0.3rem;">
                 Source code, issues, and contributions
             </p>
-            <a href="https://github.com/voriongit/vorion" style="font-size:0.85rem;">View on GitHub &rarr;</a>
+            <a href="https://github.com/vorionsys/vorion" style="font-size:0.85rem;">View on GitHub &rarr;</a>
         </div>
     </div>
 </div>

@@ -687,7 +687,7 @@ Official SDKs available:
 ## Support
 
 - **Documentation**: https://vorion.org/docs
-- **GitHub**: https://github.com/voriongit/cognigate
+- **GitHub**: https://github.com/vorionsys/cognigate
 - **Discord**: https://discord.gg/basis-protocol
 
 ---

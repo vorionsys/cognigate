@@ -926,7 +926,7 @@ VORION_PRODUCTS: dict[str, dict[str, Any]] = {
         "status": ProductStatus.GA,
         "url": "https://basis.vorion.org",
         "docsUrl": "https://basis.vorion.org/docs",
-        "repoUrl": "https://github.com/voriongit/vorion/tree/master/packages/basis",
+        "repoUrl": "https://github.com/vorionsys/vorion/tree/main/packages/basis",
         "npmPackage": "@vorionsys/basis",
         "organization": "vorion",
         "version": "1.0.0",
@@ -939,7 +939,7 @@ VORION_PRODUCTS: dict[str, dict[str, Any]] = {
         "status": ProductStatus.GA,
         "url": "https://carid.vorion.org",
         "docsUrl": "https://carid.vorion.org/docs",
-        "repoUrl": "https://github.com/voriongit/vorion/tree/master/packages/car-spec",
+        "repoUrl": "https://github.com/vorionsys/vorion/tree/main/packages/car-spec",
         "npmPackage": "@vorionsys/car-spec",
         "organization": "vorion",
         "version": "1.0.0",
@@ -952,7 +952,7 @@ VORION_PRODUCTS: dict[str, dict[str, Any]] = {
         "status": ProductStatus.BETA,
         "url": "https://atsf.vorion.org",
         "docsUrl": "https://atsf.vorion.org/docs",
-        "repoUrl": "https://github.com/voriongit/vorion/tree/master/packages/atsf-core",
+        "repoUrl": "https://github.com/vorionsys/vorion/tree/main/packages/atsf-core",
         "npmPackage": "@vorionsys/atsf-core",
         "organization": "vorion",
         "version": "0.9.0",
@@ -965,7 +965,7 @@ VORION_PRODUCTS: dict[str, dict[str, Any]] = {
         "status": ProductStatus.BETA,
         "url": "https://learn.vorion.org",
         "docsUrl": "https://learn.vorion.org/docs",
-        "repoUrl": "https://github.com/voriongit/vorion/tree/master/kaizen",
+        "repoUrl": "https://github.com/vorionsys/vorion/tree/main/kaizen",
         "organization": "vorion",
     },
     "kaizenStudio": {
@@ -975,7 +975,7 @@ VORION_PRODUCTS: dict[str, dict[str, Any]] = {
         "category": ProductCategory.EDUCATION,
         "status": ProductStatus.BETA,
         "url": "https://kaizen.vorion.org",
-        "repoUrl": "https://github.com/voriongit/vorion/tree/master/kaizen",
+        "repoUrl": "https://github.com/vorionsys/vorion/tree/main/kaizen",
         "organization": "vorion",
     },
     "proofPlane": {
@@ -985,7 +985,7 @@ VORION_PRODUCTS: dict[str, dict[str, Any]] = {
         "category": ProductCategory.OPEN_SOURCE,
         "status": ProductStatus.BETA,
         "url": "https://vorion.org/proof-plane",
-        "repoUrl": "https://github.com/voriongit/vorion/tree/master/packages/proof-plane",
+        "repoUrl": "https://github.com/vorionsys/vorion/tree/main/packages/proof-plane",
         "npmPackage": "@vorionsys/proof-plane",
         "organization": "vorion",
         "version": "0.5.0",
@@ -997,7 +997,7 @@ VORION_PRODUCTS: dict[str, dict[str, Any]] = {
         "category": ProductCategory.OPEN_SOURCE,
         "status": ProductStatus.BETA,
         "url": "https://vorion.org/contracts",
-        "repoUrl": "https://github.com/voriongit/vorion/tree/master/packages/contracts",
+        "repoUrl": "https://github.com/vorionsys/vorion/tree/main/packages/contracts",
         "npmPackage": "@vorionsys/contracts",
         "organization": "vorion",
     },
@@ -1102,8 +1102,8 @@ API_ENDPOINTS: dict[str, dict[str, str]] = {
 
 GITHUB: dict[str, dict[str, str]] = {
     "vorion": {
-        "org": "https://github.com/voriongit",
-        "mainRepo": "https://github.com/voriongit/vorion",
+        "org": "https://github.com/vorionsys",
+        "mainRepo": "https://github.com/vorionsys/vorion",
     },
     "vorionSys": {
         "org": "https://github.com/vorionsys",

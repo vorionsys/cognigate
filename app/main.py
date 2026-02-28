@@ -404,7 +404,7 @@ footer a:hover {{ color: var(--accent); }}
     <a href="/tools/errors">Error Codes</a>
     <a href="/tools/sdks">SDKs</a>
     <a href="/tools/playground">Playground</a>
-    <a href="https://github.com/voriongit/cognigate">GitHub</a>
+    <a href="https://github.com/vorionsys/cognigate">GitHub</a>
 </nav>
 
 <section class="hero">
@@ -416,7 +416,7 @@ footer a:hover {{ color: var(--accent); }}
     <div class="cta-row">
         <a href="/docs" class="cta cta-primary">Explore the API &rarr;</a>
         <a href="/tools/playground" class="cta cta-secondary">Try the Playground</a>
-        <a href="https://github.com/voriongit/cognigate" class="cta cta-secondary">View Source</a>
+        <a href="https://github.com/vorionsys/cognigate" class="cta cta-secondary">View Source</a>
     </div>
 </section>
 
@@ -509,9 +509,9 @@ footer a:hover {{ color: var(--accent); }}
     <div class="os-box">
         <h2>Open Source. Apache 2.0.</h2>
         <p>Cognigate is the open-source enforcement engine for the BASIS standard. It executes the governance pipeline &mdash; nothing more, nothing less. Inspect it, fork it, build on it. The enforcement layer should be as transparent as the systems it governs.</p>
-        <code>git clone https://github.com/voriongit/cognigate.git</code>
+        <code>git clone https://github.com/vorionsys/cognigate.git</code>
         <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
-            <a href="https://github.com/voriongit/cognigate" class="cta cta-primary" style="font-size:0.85rem;padding:0.6rem 1.2rem;">GitHub Repository</a>
+            <a href="https://github.com/vorionsys/cognigate" class="cta cta-primary" style="font-size:0.85rem;padding:0.6rem 1.2rem;">GitHub Repository</a>
             <a href="https://basis.vorion.org" class="cta cta-secondary" style="font-size:0.85rem;padding:0.6rem 1.2rem;">Read the BASIS Standard</a>
             <a href="https://vorion.org" class="cta cta-secondary" style="font-size:0.85rem;padding:0.6rem 1.2rem;">Vorion.org</a>
         </div>
@@ -524,7 +524,7 @@ footer a:hover {{ color: var(--accent); }}
         <a href="/docs">API Docs</a> &middot;
         <a href="/openapi.json">OpenAPI Spec</a> &middot;
         <a href="/status">JSON Status</a> &middot;
-        <a href="https://github.com/voriongit/cognigate">GitHub</a>
+        <a href="https://github.com/vorionsys/cognigate">GitHub</a>
     </p>
     <p style="margin-top:0.5rem;">&copy; 2026 Vorion Risk, LLC. &middot; Powered by <a href="https://vorion.org">VORION</a></p>
 </footer>
