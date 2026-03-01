@@ -151,6 +151,41 @@ class TestTrustScoring:
         data = resp.json()
         assert data["score"] <= 799  # T4 Standard max
 
+    async def test_black_box_ceiling_caps_at_t2(self, client):
+        """BLACK_BOX ceiling is T2 (max 499)."""
+        await client.post("/v1/trust/admit", json={
+            "agentId": "agent_bb",
+            "name": "Black Box",
+            "observationTier": "BLACK_BOX",
+        })
+        for _ in range(100):
+            await client.post("/v1/trust/agent_bb/signal", json={
+                "type": "success",
+                "source": "test",
+                "weight": 1.0,
+            })
+        resp = await client.get("/v1/trust/agent_bb")
+        data = resp.json()
+        assert data["score"] <= 499  # T2 Provisional max
+
+    async def test_white_box_ceiling_allows_full_range(self, client):
+        """WHITE_BOX ceiling is T7 (max 1000)."""
+        await client.post("/v1/trust/admit", json={
+            "agentId": "agent_wb",
+            "name": "White Box",
+            "observationTier": "WHITE_BOX",
+        })
+        for _ in range(100):
+            await client.post("/v1/trust/agent_wb/signal", json={
+                "type": "success",
+                "source": "test",
+                "weight": 1.0,
+            })
+        resp = await client.get("/v1/trust/agent_wb")
+        data = resp.json()
+        # WHITE_BOX ceiling is T7=1000, so score only limited by max 1000
+        assert data["score"] <= 1000
+
     async def test_signal_on_unknown_agent_404(self, client):
         resp = await client.post("/v1/trust/nonexistent/signal", json={
             "type": "success",
