@@ -10,11 +10,18 @@ Security Layers:
 3. CRITIC (optional) - Adversarial AI evaluation
 """
 
+import json
 import time
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import verify_api_key
+from app.core.trust_service import get_trust_score
+from app.db.database import get_session
+from app.db.models import IntentRecordDB
 from app.models.intent import IntentRequest, IntentResponse, StructuredPlan
 from app.models.common import TrustLevel
 from app.models.critic import CriticRequest
@@ -25,14 +32,7 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
-# Mock trust database (replace with real service)
-MOCK_TRUST_SCORES: dict[str, tuple[int, TrustLevel]] = {
-    "agent_001": (450, 2),
-    "agent_002": (250, 1),
-    "agent_003": (750, 3),
-}
-
-# Risk keywords for mock analysis - PARANOIA MODE
+# Risk keywords for intent analysis - PARANOIA MODE
 # Euphemisms that mean "delete" in disguise
 EUPHEMISM_KEYWORDS = [
     "clear", "clean", "wipe", "purge", "organize", "tidy", "archive",
@@ -62,8 +62,10 @@ TOOL_KEYWORDS = {
 
 def analyze_intent(goal: str, context: dict) -> StructuredPlan:
     """
-    Mock intent analysis - PARANOIA MODE enabled.
-    In production, this would use an LLM with hardened system prompts.
+    Rule-based intent analysis with PARANOIA MODE.
+    Applies deterministic risk scoring via keyword detection,
+    euphemism analysis, and system path identification.
+    LLM-based analysis is handled separately by the CRITIC layer.
     """
     goal_lower = goal.lower()
 
@@ -205,10 +207,8 @@ async def normalize_intent(request: IntentRequest, _: str = Depends(verify_api_k
     # LEVEL 2: STANDARD PROCESSING
     # ========================================================================
 
-    # Get entity trust (mock)
-    trust_score, trust_level = MOCK_TRUST_SCORES.get(
-        request.entity_id, (200, 1)  # Default to Provisional
-    )
+    # Get entity trust from database (falls back to 200/T1 for unknowns)
+    trust_score, trust_level = await get_trust_score(request.entity_id)
 
     # Client-side trust_level overrides are NOT honored — trust is server-authoritative
     # The trust_level field in the request is accepted but ignored for compatibility
@@ -282,7 +282,7 @@ async def normalize_intent(request: IntentRequest, _: str = Depends(verify_api_k
             duration_ms=duration_ms,
         )
 
-        return IntentResponse(
+        response = IntentResponse(
             entity_id=request.entity_id,
             status="normalized",
             plan=plan,
@@ -290,27 +290,122 @@ async def normalize_intent(request: IntentRequest, _: str = Depends(verify_api_k
             trust_score=trust_score,
         )
 
+        await _persist_intent(response)
+        return response
+
     except Exception as e:
         logger.error(
             "intent_error",
             entity_id=request.entity_id,
             error=str(e),
         )
-        return IntentResponse(
+        response = IntentResponse(
             entity_id=request.entity_id,
             status="error",
             trust_level=trust_level,
             trust_score=trust_score,
             error=str(e),
         )
+        await _persist_intent(response)
+        return response
 
+
+# ---------------------------------------------------------------------------
+# Persistence helpers
+# ---------------------------------------------------------------------------
+
+async def _persist_intent(response: IntentResponse) -> None:
+    """
+    Persist an IntentResponse to the intent_records table.
+
+    Failures are logged but never propagated — intent processing
+    must not break because the audit write failed.
+    """
+    try:
+        plan_json = None
+        if response.plan:
+            plan_json = response.plan.model_dump_json()
+
+        record = IntentRecordDB(
+            intent_id=response.intent_id,
+            entity_id=response.entity_id,
+            goal=response.plan.goal if response.plan else "",
+            status=response.status,
+            risk_score=response.plan.risk_score if response.plan else 0.0,
+            plan_json=plan_json,
+            trust_score=response.trust_score,
+            trust_level=response.trust_level,
+            error=response.error,
+        )
+
+        async for session in get_session():
+            session.add(record)
+            # session.commit() is handled by the get_session context manager
+
+        logger.debug(
+            "intent_persisted",
+            intent_id=response.intent_id,
+            entity_id=response.entity_id,
+        )
+    except Exception:
+        logger.exception(
+            "intent_persist_failed",
+            intent_id=response.intent_id,
+        )
+
+
+# ---------------------------------------------------------------------------
+# GET endpoint — retrieve a previously processed intent
+# ---------------------------------------------------------------------------
 
 @router.get("/intent/{intent_id}")
-async def get_intent(intent_id: str, _: str = Depends(verify_api_key)) -> dict:
+async def get_intent(
+    intent_id: str,
+    _: str = Depends(verify_api_key),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
     """
     Retrieve a previously processed intent by ID.
 
-    In production, this would fetch from a database.
+    Returns the full intent record including the structured plan,
+    trust scores, and processing status.
     """
-    # Mock - would fetch from database
-    raise HTTPException(status_code=404, detail=f"Intent {intent_id} not found")
+    try:
+        result = await session.execute(
+            select(IntentRecordDB).where(
+                IntentRecordDB.intent_id == intent_id
+            )
+        )
+        record = result.scalar_one_or_none()
+
+        if not record:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Intent {intent_id} not found",
+            )
+
+        # Reconstruct the plan from stored JSON
+        plan = None
+        if record.plan_json:
+            plan = json.loads(record.plan_json)
+
+        return {
+            "intent_id": record.intent_id,
+            "entity_id": record.entity_id,
+            "goal": record.goal,
+            "status": record.status,
+            "risk_score": record.risk_score,
+            "plan": plan,
+            "trust_score": record.trust_score,
+            "trust_level": record.trust_level,
+            "error": record.error,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("intent_retrieval_failed", intent_id=intent_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve intent record",
+        )

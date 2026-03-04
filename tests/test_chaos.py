@@ -258,28 +258,36 @@ class TestC3DatabaseFailure:
         """C3: DB failure during proof recording → decision still returned."""
         from httpx import AsyncClient, ASGITransport
         from app.main import app
+        from app.core.auth import verify_api_key
+
+        async def _bypass_auth() -> str:
+            return "test-key"
 
         # The enforce endpoint should work even if proof recording fails
         # because it catches and logs DB errors
+        app.dependency_overrides[verify_api_key] = _bypass_auth
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post("/v1/enforce", json={
-                "entity_id": "agent_test",
-                "trust_level": 3,
-                "trust_score": 500,
-                "plan": {
-                    "plan_id": "plan_db_test",
-                    "goal": "Read a file",
-                    "tools_required": ["file_read"],
-                    "data_classifications": [],
-                    "risk_score": 0.2,
-                    "reasoning_trace": "Simple file read",
-                },
-            })
-            # Even if proof recording fails internally, the endpoint should respond
-            assert response.status_code == 200
-            data = response.json()
-            assert "action" in data
+        try:
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post("/v1/enforce", json={
+                    "entity_id": "agent_test",
+                    "trust_level": 3,
+                    "trust_score": 500,
+                    "plan": {
+                        "plan_id": "plan_db_test",
+                        "goal": "Read a file",
+                        "tools_required": ["file_read"],
+                        "data_classifications": [],
+                        "risk_score": 0.2,
+                        "reasoning_trace": "Simple file read",
+                    },
+                })
+                # Even if proof recording fails internally, the endpoint should respond
+                assert response.status_code == 200
+                data = response.json()
+                assert "action" in data
+        finally:
+            app.dependency_overrides.pop(verify_api_key, None)
 
 
 # =============================================================================

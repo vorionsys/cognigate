@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 
 from app.main import app
 from app.db.database import Base, get_session
+from app.core.auth import verify_api_key
 from app.core.policy_engine import policy_engine
+
+
+async def _bypass_auth() -> str:
+    return "test-key"
 
 
 @pytest_asyncio.fixture
@@ -29,7 +34,7 @@ async def db_session():
 
 @pytest_asyncio.fixture
 async def proof_client(db_session):
-    """Client with overridden DB session for proof endpoints."""
+    """Client with overridden DB session and auth for proof endpoints."""
     if not policy_engine.list_policies():
         policy_engine.load_default_policies()
 
@@ -37,10 +42,12 @@ async def proof_client(db_session):
         yield db_session
 
     app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[verify_api_key] = _bypass_auth
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_session, None)
+    app.dependency_overrides.pop(verify_api_key, None)
 
 
 @pytest.mark.anyio

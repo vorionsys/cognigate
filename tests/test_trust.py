@@ -8,9 +8,17 @@ processing, score clamping, ceiling enforcement, and revocation.
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from app.main import app
+from app.db.database import Base, get_session
+from app.core.auth import verify_api_key
 from app.routers.trust import _trust_state, _trust_signals
+
+
+async def _bypass_auth() -> str:
+    """Test auth bypass."""
+    return "test-key"
 
 
 @pytest_asyncio.fixture
@@ -18,9 +26,24 @@ async def client():
     """Create test client and clear trust state between tests."""
     _trust_state.clear()
     _trust_signals.clear()
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def override_get_session():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[verify_api_key] = _bypass_auth
+    app.dependency_overrides[get_session] = override_get_session
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+    app.dependency_overrides.pop(verify_api_key, None)
+    app.dependency_overrides.pop(get_session, None)
+    await engine.dispose()
 
 
 @pytest.mark.asyncio

@@ -146,12 +146,12 @@ class TestRigorMode:
 
     async def test_strict_mode_evaluates_all_policies(self, async_client: AsyncClient, sample_plan):
         """Catastrophe: STRICT mode skips policies → security gaps."""
+        # T1 (Observed) → server selects STRICT automatically
         request = {
             "entity_id": "agent_test",
-            "trust_level": 3,
-            "trust_score": 500,
+            "trust_level": 1,
+            "trust_score": 200,
             "plan": sample_plan,
-            "rigor_mode": "strict",
         }
         response = await async_client.post("/v1/enforce", json=request)
         data = response.json()
@@ -160,12 +160,12 @@ class TestRigorMode:
         assert len(data["policies_evaluated"]) > 0
 
     async def test_lite_mode_returns_correct_label(self, async_client: AsyncClient, sample_plan):
+        # T5 (Trusted) → server selects LITE automatically
         request = {
             "entity_id": "agent_test",
-            "trust_level": 4,
+            "trust_level": 5,
             "trust_score": 650,
             "plan": sample_plan,
-            "rigor_mode": "lite",
         }
         response = await async_client.post("/v1/enforce", json=request)
         data = response.json()

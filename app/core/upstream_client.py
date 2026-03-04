@@ -118,7 +118,8 @@ async def forward_request(
 
         try:
             data = response.json()
-        except Exception:
+        except (ValueError, KeyError) as exc:
+            logger.warning("upstream_response_parse_error: %s", str(exc))
             data = {"raw": response.text}
 
         return {

@@ -5,22 +5,46 @@ euphemism evasion, and critic integration.
 Every test answers: "What catastrophic bug does this catch?"
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from app.main import app
+from app.db.database import Base, get_session
+from app.core.auth import verify_api_key
 from app.routers.intent import analyze_intent
 from app.core.policy_engine import policy_engine
+
+
+async def _bypass_auth() -> str:
+    return "test-key"
 
 
 @pytest_asyncio.fixture
 async def client():
     if not policy_engine.list_policies():
         policy_engine.load_default_policies()
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def override_get_session():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[verify_api_key] = _bypass_auth
+    app.dependency_overrides[get_session] = override_get_session
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+    app.dependency_overrides.pop(verify_api_key, None)
+    app.dependency_overrides.pop(get_session, None)
+    await engine.dispose()
 
 
 # =============================================================================
@@ -204,7 +228,12 @@ class TestIntentEndpoint:
         })
         assert resp.json()["status"] == "blocked"
 
-    async def test_known_agent_gets_correct_trust(self, client):
+    @patch(
+        "app.routers.intent.get_trust_score",
+        new_callable=AsyncMock,
+        return_value=(450, 2),
+    )
+    async def test_known_agent_gets_correct_trust(self, mock_trust, client):
         """Catastrophe: agent gets wrong trust level → wrong permissions."""
         resp = await client.post("/v1/intent", json={
             "entity_id": "agent_001",
@@ -213,6 +242,7 @@ class TestIntentEndpoint:
         data = resp.json()
         assert data["trust_score"] == 450
         assert data["trust_level"] == 2
+        mock_trust.assert_awaited_with("agent_001")
 
     async def test_unknown_agent_defaults_to_low_trust(self, client):
         """Catastrophe: unknown agent gets high trust → full access."""
@@ -224,13 +254,18 @@ class TestIntentEndpoint:
         assert data["trust_score"] == 200
         assert data["trust_level"] == 1
 
-    async def test_trust_level_override_is_applied(self, client):
+    async def test_trust_is_server_authoritative(self, client):
+        """Trust level is resolved server-side; client override is ignored."""
         resp = await client.post("/v1/intent", json={
-            "entity_id": "agent_001",
+            "entity_id": "unknown_agent",
             "goal": "Read a file",
             "trust_level": 5,
         })
-        assert resp.json()["trust_level"] == 5
+        # Server returns the DB-resolved trust (default 200/T1), NOT the
+        # client-requested trust_level of 5.
+        data = resp.json()
+        assert data["trust_level"] == 1
+        assert data["trust_score"] == 200
 
     async def test_intent_response_has_plan_with_risk(self, client):
         """Catastrophe: response missing risk_score → enforce can't evaluate."""

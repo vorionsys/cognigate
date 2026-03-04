@@ -8,8 +8,14 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from app.main import app
-from app.db.database import Base
+from app.db.database import Base, get_session
 from app.core.policy_engine import policy_engine
+from app.core.auth import verify_api_key, verify_admin_key
+
+
+async def _bypass_auth() -> str:
+    """Test auth bypass — returns a dummy key without hitting settings."""
+    return "test-key"
 
 
 @pytest.fixture(scope="session")
@@ -21,6 +27,21 @@ def anyio_backend():
 @pytest_asyncio.fixture
 async def async_client():
     """Create an async HTTP client for testing endpoints."""
+    # In-memory SQLite DB for tests
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def override_get_session():
+        async with session_factory() as session:
+            yield session
+
+    # Bypass API key verification and DB for all integration tests
+    app.dependency_overrides[verify_api_key] = _bypass_auth
+    app.dependency_overrides[verify_admin_key] = _bypass_auth
+    app.dependency_overrides[get_session] = override_get_session
+
     # Initialize policy engine for tests
     if not policy_engine.list_policies():
         policy_engine.load_default_policies()
@@ -28,6 +49,11 @@ async def async_client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+    app.dependency_overrides.pop(verify_api_key, None)
+    app.dependency_overrides.pop(verify_admin_key, None)
+    app.dependency_overrides.pop(get_session, None)
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture
