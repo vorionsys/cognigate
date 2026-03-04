@@ -82,18 +82,34 @@ async def check_intent(goal: str, entity_id: str):
 
 ## Trust Tiers (T0–T7)
 
-| Tier | Name | Score | Execution Path | Capabilities |
-|------|------|-------|----------------|--------------|
-| T0 | Untrusted | 0–199 | Full sandbox | Read-only, no external calls |
-| T1 | Provisional | 200–399 | Restricted | Basic internal ops |
-| T2 | Trusted | 400–599 | Standard | External APIs (rate-limited) |
-| T3 | Verified | 600–799 | Elevated | PII, shell, limited write |
-| T4 | Privileged | 800–899 | High-trust | Full tools with audit |
-| T5 | Autonomous | 900–949 | Express path | Near-full autonomy |
-| T6 | Council | 950–989 | Multi-agent oversight | Requires peer council |
-| T7 | Sovereign | 990–1000 | Minimal gating | Full autonomy (with provable receipts) |
+Tier definitions are sourced from `@vorionsys/shared-constants` — canonical definitions for the Vorion ecosystem.
 
-*These tier boundaries are our arbitrary starting point. Help us refine them.*
+| Tier | Name | Score Range | Capabilities |
+|------|------|-------------|--------------|
+| T0 | Sandbox | 0–199 | Read-only, no external calls; all intents require approval |
+| T1 | Observed | 200–349 | Basic tools, scoped data; enhanced logging active |
+| T2 | Provisional | 350–499 | Standard tools, rate-limited; sensitive ops require review |
+| T3 | Monitored | 500–649 | Full standard toolset; continuous monitoring |
+| T4 | Standard | 650–799 | Extended tools + external APIs; green-light for most operations |
+| T5 | Trusted | 800–875 | Cross-namespace access; elevated authority scope |
+| T6 | Certified | 876–950 | Administrative operations; can approve others' intents |
+| T7 | Autonomous | 951–1000 | Unrestricted within policy; self-governing |
+
+Trust scores use **asymmetric dynamics**: failures impact trust 3× more than successes reward it. Idle agents decay to 50% at 182 days. See [BASIS spec](https://github.com/vorionsys/vorion/blob/main/docs/BASIS.md) for full scoring model.
+
+## Test Coverage
+
+Cognigate's Python test suite covers compliance verification across 13 frameworks:
+
+| Framework | Tests | Coverage |
+|-----------|-------|---------|
+| NIST SP 800-53 | 20 | 52 controls implemented |
+| SOC 2 | 13 | Type II controls |
+| PCI DSS | 32 | Controls mapped |
+| FedRAMP | 35 | Controls mapped |
+| ISO 27001, GDPR, EU AI Act, + 6 more | ~15 | Framework health checks |
+
+**Total Python tests: 692** | Run: `pytest tests/`
 
 ## Vorion Ecosystem
 
