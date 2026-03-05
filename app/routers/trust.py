@@ -67,6 +67,21 @@ SIGNAL_WEIGHTS = {
     "violation": -3.0,
 }
 
+# Tier-scaled failure multipliers.
+# Lower tiers are more lenient so new agents can ascend more easily.
+# Multiplier grows with trust level — earning trust is hard to lose at T0,
+# but a high-trust agent pays a steep price for any failure.
+TIER_FAILURE_MULTIPLIERS: dict[int, float] = {
+    0: 2.0,   # T0 Sandbox      — very lenient, aids ascension
+    1: 3.0,   # T1 Observed
+    2: 4.0,   # T2 Provisional
+    3: 5.0,   # T3 Monitored
+    4: 7.0,   # T4 Standard
+    5: 10.0,  # T5 Trusted
+    6: 10.0,  # T6 Certified
+    7: 10.0,  # T7 Autonomous
+}
+
 
 # =============================================================================
 # ROUTES
@@ -229,8 +244,14 @@ async def record_signal(
         raise HTTPException(status_code=403, detail="Agent is revoked")
 
     score_before = info["score"]
+    current_tier = int(info["tier"])
     direction = SIGNAL_WEIGHTS.get(body.type, 0.0)
-    delta = int(direction * body.weight * 50)
+    if body.type == "failure" and direction < 0:
+        # Scale penalty by tier: lower tiers get smaller multipliers to aid ascension
+        tier_mult = TIER_FAILURE_MULTIPLIERS.get(current_tier, 2.0)
+        delta = -int(body.weight * 50 * tier_mult)
+    else:
+        delta = int(direction * body.weight * 50)
 
     # Apply score change, clamped to [0, 1000]
     new_score = max(0, min(1000, score_before + delta))
