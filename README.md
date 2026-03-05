@@ -95,7 +95,7 @@ Tier definitions are sourced from `@vorionsys/shared-constants` — canonical de
 | T6 | Certified | 876–950 | Administrative operations; can approve others' intents |
 | T7 | Autonomous | 951–1000 | Unrestricted within policy; self-governing |
 
-Trust scores use **asymmetric dynamics**: failures impact trust 3× more than successes reward it. Idle agents decay to 50% at 182 days. See [BASIS spec](https://github.com/vorionsys/vorion/blob/main/docs/BASIS.md) for full scoring model.
+Trust scores use **asymmetric dynamics**: failures apply a tier-scaled 7–10× penalty while positive signals provide smaller recovery bonuses. Idle agents decay to 50% at 182 days (182-day half-life). See [BASIS spec](https://github.com/vorionsys/vorion/blob/main/docs/BASIS.md) for full scoring model.
 
 ## Test Coverage
 
