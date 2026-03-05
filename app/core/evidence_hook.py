@@ -125,10 +125,10 @@ class EvidenceHook:
 
         except Exception:
             # Evidence generation MUST NOT block proof chain operations.
-            # Log the error and return empty to allow the proof record
-            # commit to proceed.
+            # Log the error (with full traceback) and return empty to
+            # allow the proof record commit to proceed.
             logger.exception(
-                "evidence_hook_failed",
+                "evidence_generation_failed",
                 extra={
                     "proof_id": proof_record.proof_id,
                     "action_type": proof_record.action_type,

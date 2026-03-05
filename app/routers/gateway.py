@@ -15,10 +15,14 @@ Routes are grouped by domain:
 - /v1/gateway/dashboard/*     -> Analytics and metrics
 """
 
+import logging
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.core.upstream_client import forward_request, get_circuit_breaker_status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -85,6 +89,10 @@ async def gateway_proxy(domain: str, path: str, request: Request) -> JSONRespons
         try:
             body = await request.json()
         except Exception:
+            logger.warning(
+                "gateway_request_body_parse_failed",
+                extra={"method": request.method, "domain": domain, "path": path},
+            )
             body = None
 
     # Build upstream path

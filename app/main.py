@@ -98,15 +98,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         await cache_manager.disconnect()
     except Exception:
-        pass
+        logger.warning("shutdown_cleanup_error", exc_info=True)
     try:
         await close_db()
     except Exception:
-        pass
+        logger.warning("shutdown_cleanup_error", exc_info=True)
     try:
         await async_log_queue.stop()
     except Exception:
-        pass
+        logger.warning("shutdown_cleanup_error", exc_info=True)
     logger.info("cognigate_shutdown")
 
 

@@ -76,15 +76,27 @@ async def init_db() -> None:
         expire_on_commit=False,
     )
 
-    # Create tables
-    async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    db_type = "postgresql (Neon)" if is_postgres else "sqlite"
-    logger.info(
-        "database_initialized",
-        extra={"database_type": db_type}
-    )
+    # Schema management:
+    # - Production (PostgreSQL): use Alembic migrations (alembic upgrade head)
+    # - Development (SQLite): auto-create tables for convenience
+    if is_postgres:
+        logger.info(
+            "database_initialized",
+            extra={
+                "database_type": "postgresql (Neon)",
+                "schema_management": "alembic",
+            },
+        )
+    else:
+        async with _engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info(
+            "database_initialized",
+            extra={
+                "database_type": "sqlite",
+                "schema_management": "create_all",
+            },
+        )
 
 
 async def close_db() -> None:

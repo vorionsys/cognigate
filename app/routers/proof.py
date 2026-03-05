@@ -112,6 +112,9 @@ async def create_proof_record(
         logger.exception(
             "evidence_hook_call_failed",
             proof_id=record.proof_id,
+            chain_position=record.chain_position,
+            action_type=record.action_type,
+            decision=record.decision,
         )
 
     return record

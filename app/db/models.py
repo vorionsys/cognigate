@@ -104,3 +104,20 @@ class TrustSignalDB(Base):
     delta: Mapped[int] = mapped_column(Integer)
     context_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class IntentRecordDB(Base):
+    """Persisted intent records for retrieval via GET /intent/{intent_id}."""
+    __tablename__ = "intent_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    intent_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    entity_id: Mapped[str] = mapped_column(String(128), index=True)
+    goal: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default="normalized")
+    risk_score: Mapped[float] = mapped_column(Float, default=0.0)
+    plan_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    trust_score: Mapped[int] = mapped_column(Integer, default=200)
+    trust_level: Mapped[int] = mapped_column(Integer, default=1)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
