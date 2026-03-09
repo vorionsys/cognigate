@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 Vorion LLC
+
 """
 Tests for Ed25519 cryptographic signature system.
 

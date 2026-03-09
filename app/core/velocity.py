@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 Vorion LLC
+
 """
 VELOCITY CAPS - Rate Limiting for Autonomous Agents (L0-L2)
 

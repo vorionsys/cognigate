@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 Vorion LLC
+
 """
 Tests for the ENFORCE endpoint — policy bypass attempts, rigor mode
 consistency, cross-layer invariants.

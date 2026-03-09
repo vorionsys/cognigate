@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 Vorion LLC
+
 """
 Generate CSS variable blocks for all 4 themes.
 

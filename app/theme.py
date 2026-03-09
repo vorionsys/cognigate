@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 Vorion LLC
+
 """
 Unified Theme System for Cognigate
 Mirror of @vorionsys/shared-constants/themes.ts
