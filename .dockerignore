@@ -1,0 +1,42 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov/
+coverage.xml
+.coverage
+
+# Virtual envs
+.venv
+venv
+env
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dev files
+tests/
+docs/
+scripts/
+static/
+*.md
+!README.md
+.env
+*.db
+mutmut_config.py
+pytest.ini
+
+# CI
+.github/

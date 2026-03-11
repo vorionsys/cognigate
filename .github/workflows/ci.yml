@@ -110,7 +110,7 @@ jobs:
         run: ruff check app/ --select=F
 
       - name: Run ruff format check
-        run: ruff format --check app/ || true
+        run: ruff format --check app/
 
   # ---------------------------------------------------------------------------
   # Job 3: Type Checking
@@ -142,10 +142,9 @@ jobs:
           pip install -r requirements.txt
           pip install mypy
 
-      - name: Run mypy (type checker — advisory)
-        run: mypy app/ --ignore-missing-imports || true
-        # Note: mypy has pre-existing style issues (untyped dicts, missing annotations).
-        # Runs as advisory until the codebase is fully typed.
+      - name: Run mypy (type checker)
+        run: mypy app/ --ignore-missing-imports
+        # Note: now blocking — mypy errors must be resolved before merge.
 
   # ---------------------------------------------------------------------------
   # Job 4: Security Scanning

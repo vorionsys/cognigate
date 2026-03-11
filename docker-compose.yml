@@ -1,0 +1,81 @@
+# =============================================================================
+# Cognigate Engine — Local Development Stack
+# =============================================================================
+# Usage:
+#   docker compose up              # Start all services
+#   docker compose up -d           # Start detached
+#   docker compose logs -f api     # Follow API logs
+#   docker compose down            # Stop all services
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Cognigate API
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=Cognigate Engine
+      - APP_VERSION=0.1.0
+      - DEBUG=true
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=console
+      - DATABASE_URL=postgresql+asyncpg://cognigate:cognigate@postgres:5432/cognigate
+      - REDIS_URL=redis://redis:6379
+      - REDIS_ENABLED=true
+      - SIGNATURE_ENABLED=true
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - ADMIN_API_KEY=dev-admin-key-change-in-production
+      - CRITIC_ENABLED=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=cognigate
+      - POSTGRES_PASSWORD=cognigate
+      - POSTGRES_DB=cognigate
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cognigate"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Redis
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:
