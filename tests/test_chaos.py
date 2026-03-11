@@ -306,6 +306,7 @@ class TestCircuitBreakerStateTransitions:
         cb = CircuitBreaker(CircuitConfig(
             auto_reset_seconds=0,
             half_open_requests=2,
+            graduated_recovery_enabled=False,  # Legacy half-open behavior
         ))
 
         # Start CLOSED

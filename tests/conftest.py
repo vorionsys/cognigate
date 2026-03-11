@@ -14,6 +14,8 @@ from app.main import app
 from app.db.database import Base, get_session
 from app.core.policy_engine import policy_engine
 from app.core.auth import verify_api_key, verify_admin_key
+from app.core.velocity import reset_velocity_tracker
+from app.core.circuit_breaker import circuit_breaker
 
 
 async def _bypass_auth() -> str:
@@ -48,6 +50,10 @@ async def async_client():
     # Initialize policy engine for tests
     if not policy_engine.list_policies():
         policy_engine.load_default_policies()
+
+    # Reset global singletons to prevent test pollution
+    reset_velocity_tracker()
+    circuit_breaker.manual_reset()
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

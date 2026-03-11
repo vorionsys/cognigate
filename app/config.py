@@ -83,6 +83,27 @@ class Settings(BaseSettings):
     gateway_timeout_ms: int = 30000
     gateway_circuit_breaker_threshold: int = 5
 
+    # Circuit Breaker Hardening
+    # Hysteresis: recovery thresholds are stricter than trip thresholds
+    # to prevent oscillation. Trip at 10%, recover only at 5%.
+    cb_hysteresis_high_risk_recovery: float = 0.05
+    cb_hysteresis_tripwire_recovery: int = 1
+    cb_hysteresis_injection_recovery: int = 0
+    cb_hysteresis_critic_recovery: int = 2
+    # Exponential backoff: consecutive trips increase auto-reset time
+    cb_backoff_multiplier: float = 2.0
+    cb_max_backoff_seconds: int = 3600
+    cb_consecutive_trip_decay_seconds: int = 900
+    # Graduated recovery: progressive half-open allowance (10% → 25% → 50% → 100%)
+    cb_graduated_recovery_enabled: bool = True
+    cb_graduated_stage_requests: int = 3
+
+    # Velocity Auto-Throttle
+    # After N violations, entity is auto-throttled with exponential duration
+    velocity_auto_throttle_threshold: int = 3
+    velocity_auto_throttle_base_seconds: float = 30.0
+    velocity_auto_throttle_max_seconds: float = 3600.0
+
     # Critic Pattern - AI Provider Configuration
     # Supported: "anthropic" (Claude), "openai" (GPT), "google" (Gemini), "xai" (Grok)
     critic_provider: str = "xai"  # Default to Grok

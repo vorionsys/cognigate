@@ -28,6 +28,7 @@ def cb():
         auto_reset_seconds=1,
         half_open_requests=2,
         metrics_window_seconds=300,
+        graduated_recovery_enabled=False,  # Legacy half-open behavior
     ))
 
 

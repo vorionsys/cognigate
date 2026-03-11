@@ -146,12 +146,18 @@ class VelocityTracker:
         return self._states[entity_id]
 
     def _prune_old_timestamps(self, state: VelocityState, max_age: int = 86400):
-        """Remove timestamps older than max_age seconds."""
+        """Remove timestamps older than max_age seconds.
+
+        Preserves the deque type with its maxlen constraint.
+        Previous implementation replaced deque with list — this was a bug
+        that lost the O(1) append guarantees and maxlen safety.
+        """
         now = time.time()
         cutoff = now - max_age
-        state.action_timestamps = [
-            ts for ts in state.action_timestamps if ts > cutoff
-        ]
+        # Pop from left while entries are older than cutoff.
+        # Timestamps are appended in order, so leftmost is oldest.
+        while state.action_timestamps and state.action_timestamps[0] <= cutoff:
+            state.action_timestamps.popleft()
 
     def _count_actions_in_window(self, state: VelocityState, window_seconds: int) -> int:
         """Count actions within a time window."""
@@ -224,6 +230,22 @@ class VelocityTracker:
                         violations=state.violations,
                     )
 
+                    # Escalation: auto-throttle on repeated violations (3+)
+                    # Exponential throttle duration: 30s, 60s, 120s, ...
+                    if state.violations >= 3:
+                        escalation_duration = min(
+                            30.0 * (2 ** (state.violations - 3)),
+                            3600.0,  # Cap at 1 hour
+                        )
+                        state.is_throttled = True
+                        state.throttle_until = now + escalation_duration
+                        logger.warning(
+                            "velocity_auto_throttle",
+                            entity_id=entity_id,
+                            violations=state.violations,
+                            throttle_seconds=escalation_duration,
+                        )
+
                     return VelocityCheckResult(
                         allowed=False,
                         tier_violated=tier,
@@ -283,17 +305,48 @@ class VelocityTracker:
             }
 
     async def get_all_stats(self) -> list[dict]:
-        """Get velocity statistics for all entities."""
+        """Get velocity statistics for all entities.
+
+        Uses _get_stats_unlocked instead of get_stats to avoid
+        re-acquiring the async lock (which would cause a deadlock).
+        """
         async with self._lock:
-            # Use await for async get_stats
             stats = []
             for eid in self._states.keys():
-                stats.append(await self.get_stats(eid))
+                stats.append(self._get_stats_unlocked(eid))
             return stats
+
+    def _get_stats_unlocked(self, entity_id: str) -> dict:
+        """Get velocity statistics without acquiring the lock.
+
+        Used internally by get_all_stats to avoid deadlock.
+        Caller MUST hold self._lock.
+        """
+        state = self._get_state(entity_id)
+        return {
+            "entity_id": entity_id,
+            "total_actions": state.total_actions,
+            "violations": state.violations,
+            "is_throttled": state.is_throttled,
+            "throttle_until": state.throttle_until,
+            "actions_last_minute": self._count_actions_in_window(state, 60),
+            "actions_last_hour": self._count_actions_in_window(state, 3600),
+            "actions_last_day": self._count_actions_in_window(state, 86400),
+        }
 
 
 # Global velocity tracker instance
 velocity_tracker = VelocityTracker()
+
+
+def reset_velocity_tracker():
+    """Reset the global velocity tracker state.
+
+    Used between tests to prevent state pollution. In production, state
+    is per-process and reset on restart.
+    """
+    global velocity_tracker
+    velocity_tracker = VelocityTracker()
 
 
 async def check_velocity(entity_id: str, trust_level: int = 1) -> VelocityCheckResult:

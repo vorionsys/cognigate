@@ -113,10 +113,32 @@ class CircuitConfig:
     injection_threshold: int = 2       # 2 injections triggers trip
     critic_block_threshold: int = 5    # 5 critic blocks triggers trip
 
+    # Hysteresis — recovery requires lower ratios than trip thresholds.
+    # Prevents oscillation: trips at 10% high-risk, recovers only when <5%.
+    # Set to 0.0 to disable hysteresis (recover at any ratio below trip threshold).
+    hysteresis_high_risk_recovery: float = 0.05  # Must drop to 5% to recover
+    hysteresis_tripwire_recovery: int = 1         # Must drop to 1 to recover
+    hysteresis_injection_recovery: int = 0        # Must drop to 0 to recover
+    hysteresis_critic_recovery: int = 2           # Must drop to 2 to recover
+
     # Recovery
-    auto_reset_seconds: int = 300      # 5 minute auto-reset
+    auto_reset_seconds: int = 300      # 5 minute auto-reset (base value)
     half_open_requests: int = 3        # Requests to test in half-open
     metrics_window_seconds: int = 300  # 5 minute metrics window
+
+    # Exponential backoff — each consecutive trip doubles the auto-reset time.
+    # After 3 trips: 300s → 600s → 1200s. Capped at max_backoff_seconds.
+    # This prevents rapid trip/reset oscillation under sustained attack.
+    backoff_multiplier: float = 2.0           # Multiplier per consecutive trip
+    max_backoff_seconds: int = 3600           # 1 hour maximum backoff cap
+    consecutive_trip_decay_seconds: int = 900  # Reset consecutive count after 15m stability
+
+    # Graduated half-open recovery — instead of binary test (pass N requests → close),
+    # progressively increase the allowance rate from 10% → 25% → 50% → 100%.
+    # Each stage requires `graduated_stage_requests` successes before advancing.
+    graduated_recovery_enabled: bool = True
+    graduated_stages: tuple[float, ...] = (0.10, 0.25, 0.50, 1.0)  # Allowance rates
+    graduated_stage_requests: int = 3  # Successes needed per stage
 
     # Entity-level
     entity_violation_threshold: int = 10  # Violations before entity halt
@@ -142,6 +164,15 @@ class CircuitBreaker:
         self._halted_entities: set[str] = set()
         self._cascade_halt_children: dict[str, set[str]] = defaultdict(set)
 
+        # Backoff state — tracks consecutive trips for exponential backoff
+        self._consecutive_trips = 0
+        self._last_trip_time: float = 0.0
+
+        # Graduated recovery state — tracks progress through recovery stages
+        self._recovery_stage: int = 0         # Index into config.graduated_stages
+        self._recovery_stage_successes: int = 0  # Successes in current stage
+        self._half_open_total_requests: int = 0   # Total requests seen in half-open
+
     @property
     def state(self) -> CircuitState:
         """Current circuit state."""
@@ -153,13 +184,26 @@ class CircuitBreaker:
         return self._state == CircuitState.OPEN
 
     def _check_auto_reset(self):
-        """Check if circuit should auto-reset."""
+        """Check if circuit should auto-reset to half-open.
+
+        Uses exponential backoff: each consecutive trip increases the reset
+        delay by backoff_multiplier. After 15min of stability (no new trips),
+        the consecutive counter decays back to zero.
+        """
         if self._state == CircuitState.OPEN and self._current_trip:
             if self._current_trip.auto_reset_at:
                 if time.time() >= self._current_trip.auto_reset_at:
-                    logger.info("circuit_auto_reset", reason="timeout_expired")
+                    logger.info(
+                        "circuit_auto_reset",
+                        reason="timeout_expired",
+                        consecutive_trips=self._consecutive_trips,
+                    )
                     self._state = CircuitState.HALF_OPEN
                     self._half_open_successes = 0
+                    # Reset graduated recovery state
+                    self._recovery_stage = 0
+                    self._recovery_stage_successes = 0
+                    self._half_open_total_requests = 0
 
     def _check_metrics_window(self):
         """Reset metrics if window expired."""
@@ -167,14 +211,35 @@ class CircuitBreaker:
             self._metrics.reset()
 
     def _trip(self, reason: TripReason, entity_id: Optional[str] = None, details: str = ""):
-        """Trip the circuit breaker."""
+        """Trip the circuit breaker.
+
+        Applies exponential backoff: consecutive trips increase the auto-reset
+        delay. If enough time has passed since the last trip (consecutive_trip_decay_seconds),
+        the consecutive counter resets — the system has been stable long enough.
+        """
         now = time.time()
+
+        # Decay consecutive trip counter if enough time has passed since last trip
+        if (self._last_trip_time > 0 and
+                now - self._last_trip_time > self.config.consecutive_trip_decay_seconds):
+            self._consecutive_trips = 0
+
+        self._consecutive_trips += 1
+        self._last_trip_time = now
+
+        # Exponential backoff: base * multiplier^(consecutive - 1), capped
+        backoff_factor = self.config.backoff_multiplier ** (self._consecutive_trips - 1)
+        reset_seconds = min(
+            self.config.auto_reset_seconds * backoff_factor,
+            self.config.max_backoff_seconds,
+        )
+
         trip = CircuitTrip(
             reason=reason,
             timestamp=now,
             entity_id=entity_id,
             details=details,
-            auto_reset_at=now + self.config.auto_reset_seconds,
+            auto_reset_at=now + reset_seconds,
         )
 
         self._state = CircuitState.OPEN
@@ -186,12 +251,23 @@ class CircuitBreaker:
             reason=reason.value,
             entity_id=entity_id,
             details=details,
+            consecutive_trips=self._consecutive_trips,
+            reset_seconds=reset_seconds,
             auto_reset_at=datetime.fromtimestamp(trip.auto_reset_at).isoformat(),
         )
 
     def allow_request(self, entity_id: str) -> tuple[bool, str]:
         """
         Check if a request should be allowed.
+
+        In HALF_OPEN state with graduated recovery enabled, requests are
+        probabilistically allowed based on the current recovery stage:
+        - Stage 0: 10% of requests allowed
+        - Stage 1: 25% of requests allowed
+        - Stage 2: 50% of requests allowed
+        - Stage 3: 100% → circuit closes
+
+        Each stage advances after `graduated_stage_requests` consecutive successes.
 
         Returns:
             (allowed, reason)
@@ -209,15 +285,50 @@ class CircuitBreaker:
                 return False, f"Circuit OPEN: {self._current_trip.reason.value if self._current_trip else 'unknown'}"
 
             if self._state == CircuitState.HALF_OPEN:
-                # Allow limited requests for testing
-                if self._half_open_successes >= self.config.half_open_requests:
-                    # Enough successes, close the circuit
-                    self._state = CircuitState.CLOSED
-                    self._current_trip = None
-                    logger.info("circuit_closed", reason="recovery_successful")
-                    return True, "Circuit recovered"
+                if self.config.graduated_recovery_enabled:
+                    return self._graduated_allow()
+                else:
+                    # Legacy behavior: binary half-open test
+                    if self._half_open_successes >= self.config.half_open_requests:
+                        self._close_circuit("recovery_successful")
+                        return True, "Circuit recovered"
 
             return True, "Circuit closed"
+
+    def _graduated_allow(self) -> tuple[bool, str]:
+        """Graduated recovery: progressively increase allowance rate.
+
+        Uses a deterministic drip pattern (counter mod) instead of random
+        to ensure predictable, testable behavior.
+        """
+        stages = self.config.graduated_stages
+        if self._recovery_stage >= len(stages):
+            # All stages passed — close the circuit
+            self._close_circuit("graduated_recovery_complete")
+            return True, "Circuit recovered (graduated)"
+
+        allowance_rate = stages[self._recovery_stage]
+        self._half_open_total_requests += 1
+
+        # Deterministic drip: allow every Nth request where N = ceil(1/rate)
+        # e.g., rate=0.10 → allow every 10th, rate=0.25 → every 4th, etc.
+        if allowance_rate >= 1.0:
+            return True, f"Half-open stage {self._recovery_stage} (100%)"
+
+        interval = int(1.0 / allowance_rate)
+        if self._half_open_total_requests % interval == 0:
+            return True, f"Half-open stage {self._recovery_stage} ({allowance_rate:.0%})"
+
+        return False, f"Half-open stage {self._recovery_stage} ({allowance_rate:.0%}) — throttled"
+
+    def _close_circuit(self, reason: str):
+        """Transition from HALF_OPEN → CLOSED."""
+        self._state = CircuitState.CLOSED
+        self._current_trip = None
+        self._recovery_stage = 0
+        self._recovery_stage_successes = 0
+        self._half_open_total_requests = 0
+        logger.info("circuit_closed", reason=reason)
 
     def record_request(
         self,
@@ -273,12 +384,40 @@ class CircuitBreaker:
             if self._state == CircuitState.CLOSED:
                 self._check_trip_conditions(entity_id)
 
-            # Record success in half-open state
-            if self._state == CircuitState.HALF_OPEN and not was_blocked:
-                self._half_open_successes += 1
+            # Record success/failure in half-open state for graduated recovery
+            if self._state == CircuitState.HALF_OPEN:
+                if was_blocked:
+                    # Failure during recovery → re-trip immediately
+                    self._trip(
+                        TripReason.HIGH_RISK_THRESHOLD,
+                        entity_id=entity_id,
+                        details="Failure during half-open recovery",
+                    )
+                else:
+                    self._half_open_successes += 1
+                    if self.config.graduated_recovery_enabled:
+                        self._recovery_stage_successes += 1
+                        if self._recovery_stage_successes >= self.config.graduated_stage_requests:
+                            # Advance to next stage
+                            self._recovery_stage += 1
+                            self._recovery_stage_successes = 0
+                            if self._recovery_stage >= len(self.config.graduated_stages):
+                                self._close_circuit("graduated_recovery_complete")
+                            else:
+                                logger.info(
+                                    "recovery_stage_advanced",
+                                    stage=self._recovery_stage,
+                                    allowance=self.config.graduated_stages[self._recovery_stage],
+                                )
 
     def _check_trip_conditions(self, entity_id: str):
-        """Check if any trip condition is met."""
+        """Check if any trip condition is met.
+
+        Hysteresis note: Trip thresholds are HIGHER than recovery thresholds.
+        This is implemented in _check_recovery_hysteresis() which prevents
+        the circuit from closing in half-open if metrics still exceed the
+        lower recovery thresholds. The trip check here uses the trip thresholds.
+        """
         # High-risk threshold
         if (self._metrics.total_requests >= 10 and
             self._metrics.high_risk_ratio > self.config.high_risk_threshold):
@@ -313,6 +452,51 @@ class CircuitBreaker:
             )
             return
 
+    def check_recovery_hysteresis(self) -> tuple[bool, str]:
+        """Check if current metrics satisfy hysteresis recovery thresholds.
+
+        Hysteresis prevents oscillation: the circuit trips at threshold X
+        but only recovers when metrics drop to X/2 (configurable). This
+        means a system at 9% high-risk (just below the 10% trip threshold)
+        won't immediately close — it must drop to 5% first.
+
+        Returns:
+            (can_recover, reason) — True if metrics are below recovery thresholds
+        """
+        with self._lock:
+            reasons = []
+
+            # High-risk ratio check (only meaningful with enough requests)
+            if self._metrics.total_requests >= 10:
+                if self._metrics.high_risk_ratio > self.config.hysteresis_high_risk_recovery:
+                    reasons.append(
+                        f"high_risk_ratio {self._metrics.high_risk_ratio:.1%} "
+                        f"> recovery threshold {self.config.hysteresis_high_risk_recovery:.1%}"
+                    )
+
+            if self._metrics.tripwire_triggers > self.config.hysteresis_tripwire_recovery:
+                reasons.append(
+                    f"tripwire_triggers {self._metrics.tripwire_triggers} "
+                    f"> recovery threshold {self.config.hysteresis_tripwire_recovery}"
+                )
+
+            if self._metrics.injection_attempts > self.config.hysteresis_injection_recovery:
+                reasons.append(
+                    f"injection_attempts {self._metrics.injection_attempts} "
+                    f"> recovery threshold {self.config.hysteresis_injection_recovery}"
+                )
+
+            if self._metrics.critic_blocks > self.config.hysteresis_critic_recovery:
+                reasons.append(
+                    f"critic_blocks {self._metrics.critic_blocks} "
+                    f"> recovery threshold {self.config.hysteresis_critic_recovery}"
+                )
+
+            if reasons:
+                return False, "; ".join(reasons)
+
+            return True, "All metrics below recovery thresholds"
+
     def manual_trip(self, reason: str = "Manual halt"):
         """Manually trip the circuit breaker."""
         with self._lock:
@@ -324,6 +508,10 @@ class CircuitBreaker:
             self._state = CircuitState.CLOSED
             self._current_trip = None
             self._metrics.reset()
+            self._consecutive_trips = 0
+            self._recovery_stage = 0
+            self._recovery_stage_successes = 0
+            self._half_open_total_requests = 0
             logger.info("circuit_manual_reset")
 
     def halt_entity(self, entity_id: str, reason: str = "Manual halt"):
@@ -387,6 +575,25 @@ class CircuitBreaker:
                 },
                 "halted_entities": list(self._halted_entities),
                 "trip_history_count": len(self._trip_history),
+                "backoff": {
+                    "consecutive_trips": self._consecutive_trips,
+                    "current_reset_seconds": min(
+                        self.config.auto_reset_seconds * (
+                            self.config.backoff_multiplier ** max(0, self._consecutive_trips - 1)
+                        ),
+                        self.config.max_backoff_seconds,
+                    ) if self._consecutive_trips > 0 else self.config.auto_reset_seconds,
+                },
+                "recovery": {
+                    "stage": self._recovery_stage,
+                    "stage_successes": self._recovery_stage_successes,
+                    "total_stages": len(self.config.graduated_stages),
+                    "current_allowance": (
+                        self.config.graduated_stages[self._recovery_stage]
+                        if self._recovery_stage < len(self.config.graduated_stages)
+                        else 1.0
+                    ),
+                } if self._state == CircuitState.HALF_OPEN else None,
             }
 
     def get_trip_history(self, limit: int = 10) -> list[dict]:

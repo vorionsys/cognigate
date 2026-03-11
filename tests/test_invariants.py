@@ -111,7 +111,11 @@ class TestI3CircuitBreakerInvariant:
 
     def test_half_open_limits_requests(self):
         """Invariant: HALF_OPEN only allows limited recovery requests."""
-        cb = CircuitBreaker(CircuitConfig(auto_reset_seconds=0, half_open_requests=3))
+        cb = CircuitBreaker(CircuitConfig(
+            auto_reset_seconds=0,
+            half_open_requests=3,
+            graduated_recovery_enabled=False,  # Legacy half-open behavior
+        ))
         cb.manual_trip("test")
 
         # Force auto-reset to HALF_OPEN by manipulating time
