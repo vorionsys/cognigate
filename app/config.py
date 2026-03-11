@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     # Trust Engine
     default_trust_level: int = 1
     trust_decay_rate: float = 0.01
+    trust_decay_half_life_days: int = 182  # 182-day half-life for inactivity decay
+    trust_decay_floor: float = 0.50        # 50% floor — score doesn't decay below this fraction
 
     # Logging
     log_level: str = "INFO"
