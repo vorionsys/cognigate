@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.routers import enforce, intent, proof, health, admin, reference, agents, trust, auth_keys, tools, gateway, compliance
+from app.routers import enforce, intent, proof, health, admin, reference, agents, trust, auth_keys, tools, gateway, compliance, deepspace
 from app.core.cache import cache_manager
 from app.core.async_logger import async_log_queue
 from app.core.signatures import signature_manager
@@ -205,6 +205,7 @@ app.include_router(auth_keys.router, prefix=settings.api_prefix, tags=["Auth"])
 app.include_router(tools.router)
 app.include_router(gateway.router, prefix=settings.api_prefix, tags=["Gateway"])
 app.include_router(compliance.router, prefix=settings.api_prefix, tags=["Compliance"])
+app.include_router(deepspace.router, prefix=settings.api_prefix, tags=["Deep Space"])
 
 # Static files (logo, favicon)
 import os

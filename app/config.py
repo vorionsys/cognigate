@@ -58,6 +58,22 @@ class Settings(BaseSettings):
     trust_decay_half_life_days: int = 182  # 182-day half-life for inactivity decay
     trust_decay_floor: float = 0.50        # 50% floor — score doesn't decay below this fraction
 
+    # Deep Space Modules
+    # TMR Consensus — fault-tolerant multi-model redundancy
+    tmr_consensus_risk_threshold: int = 80   # Min risk ρ to trigger voting
+    tmr_divergence_threshold: float = 10.0   # Trust-point divergence threshold
+    tmr_min_replicas: int = 3                # Minimum replicas required
+    # Monte Carlo — predictive horizon risk forecasting
+    mc_default_epsilon: float = 0.05         # Per-step failure rate
+    mc_default_horizon_hours: int = 24       # Default forecast horizon
+    mc_default_trials: int = 2000            # Monte Carlo trial count
+    mc_risk_threshold: int = 60              # Min risk ρ to trigger forecasting
+    # Self-Healing — evolutionary parameter optimization
+    evolution_target_ratio: float = 10.0     # Target r_l/r_g asymmetry ratio
+    evolution_batch_hours: int = 168          # 7-day batch frequency
+    evolution_generations: int = 25           # GA generations per run
+    evolution_population: int = 20            # GA population size
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "json"
