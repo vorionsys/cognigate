@@ -138,7 +138,6 @@ class TestVelocityStats:
         assert stats_2["total_actions"] == 1
 
 
-@pytest.mark.asyncio
 class TestVelocityLimitsConfig:
     """Test velocity limit configuration."""
 

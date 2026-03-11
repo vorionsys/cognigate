@@ -16,12 +16,13 @@ Three tiers of velocity control:
 All limits are per-entity, meaning each agent has its own quota.
 """
 
+import bisect
 import time
 import asyncio
 import structlog
 from typing import Optional
 from dataclasses import dataclass, field
-from collections import defaultdict, deque
+from collections import deque
 from enum import Enum
 
 from app.config import get_settings
@@ -134,9 +135,7 @@ class VelocityTracker:
     """
 
     def __init__(self):
-        self._states: dict[str, VelocityState] = defaultdict(
-            lambda: VelocityState(entity_id="")
-        )
+        self._states: dict[str, VelocityState] = {}
         self._lock = asyncio.Lock()
 
     def _get_state(self, entity_id: str) -> VelocityState:
@@ -160,10 +159,16 @@ class VelocityTracker:
             state.action_timestamps.popleft()
 
     def _count_actions_in_window(self, state: VelocityState, window_seconds: int) -> int:
-        """Count actions within a time window."""
-        now = time.time()
-        cutoff = now - window_seconds
-        return sum(1 for ts in state.action_timestamps if ts > cutoff)
+        """Count actions within a time window.
+
+        Uses bisect for O(log n) lookup since timestamps are monotonically
+        increasing (always appended via record_action).
+        """
+        cutoff = time.time() - window_seconds
+        # bisect_right returns the insertion point after all entries <= cutoff.
+        # Everything from that index onwards is strictly > cutoff.
+        idx = bisect.bisect_right(state.action_timestamps, cutoff)
+        return len(state.action_timestamps) - idx
 
     async def check_velocity(
         self,
@@ -213,12 +218,11 @@ class VelocityTracker:
                     state.violations += 1
                     state.last_violation = now
 
-                    # Calculate retry time
-                    oldest_in_window = min(
-                        (ts for ts in state.action_timestamps
-                         if ts > now - limit.window_seconds),
-                        default=now
-                    )
+                    # Calculate retry time: find first timestamp inside the window
+                    # (bisect_right gives index of first entry > cutoff)
+                    cutoff = now - limit.window_seconds
+                    idx = bisect.bisect_right(state.action_timestamps, cutoff)
+                    oldest_in_window = state.action_timestamps[idx] if idx < len(state.action_timestamps) else now
                     retry_after = (oldest_in_window + limit.window_seconds) - now
 
                     logger.warning(

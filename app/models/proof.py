@@ -44,6 +44,25 @@ class ProofRecord(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProofRequest(BaseModel):
+    """
+    Minimal request to create a proof record.
+
+    Accepts the essential fields for any governance decision — does not
+    require a full EnforceResponse to be re-submitted. The proof layer
+    derives chain linkage, hashing, and signing internally.
+    """
+
+    entity_id: str = Field(..., description="Entity that performed the action")
+    action: str = Field(..., description="Action type recorded")
+    outcome: Literal["allowed", "denied", "escalated", "modified"] = Field(
+        ..., description="Governance decision"
+    )
+    intent_id: Optional[str] = Field(None, description="Associated intent ID (auto-generated if omitted)")
+    verdict_id: Optional[str] = Field(None, description="Associated verdict ID (auto-generated if omitted)")
+    details: Optional[dict[str, Any]] = Field(None, description="Additional context stored as inputs")
+
+
 class ProofQuery(BaseModel):
     """
     Query parameters for searching proof records.

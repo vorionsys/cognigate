@@ -7,7 +7,7 @@ ENFORCE layer models - Policy validation and gating.
 
 from typing import Optional, Literal, Any
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 from .common import generate_id, utc_now, TrustLevel
@@ -93,30 +93,29 @@ class EnforceResponse(BaseModel):
     decided_at: datetime = Field(default_factory=utc_now)
     duration_ms: float = Field(..., description="Processing time in milliseconds")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "verdict_id": "vrd_abc123",
-                "intent_id": "int_xyz789",
-                "plan_id": "plan_def456",
-                "allowed": False,
-                "action": "escalate",
-                "violations": [
-                    {
-                        "policy_id": "corp-finance-limited",
-                        "constraint_id": "high-value-approval",
-                        "severity": "high",
-                        "message": "Transaction exceeds $10,000 threshold",
-                        "blocked": False,
-                        "remediation": "Request manager approval"
-                    }
-                ],
-                "policies_evaluated": ["corp-finance-limited"],
-                "constraints_evaluated": 12,
-                "trust_impact": 0,
-                "requires_approval": True,
-                "approval_timeout": "4h",
-                "decided_at": "2026-01-08T12:00:00Z",
-                "duration_ms": 45.2
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "verdict_id": "vrd_abc123",
+            "intent_id": "int_xyz789",
+            "plan_id": "plan_def456",
+            "allowed": False,
+            "action": "escalate",
+            "violations": [
+                {
+                    "policy_id": "corp-finance-limited",
+                    "constraint_id": "high-value-approval",
+                    "severity": "high",
+                    "message": "Transaction exceeds $10,000 threshold",
+                    "blocked": False,
+                    "remediation": "Request manager approval"
+                }
+            ],
+            "policies_evaluated": ["corp-finance-limited"],
+            "constraints_evaluated": 12,
+            "trust_impact": 0,
+            "requires_approval": True,
+            "approval_timeout": "4h",
+            "decided_at": "2026-01-08T12:00:00Z",
+            "duration_ms": 45.2
         }
+    })

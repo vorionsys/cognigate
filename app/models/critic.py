@@ -9,7 +9,7 @@ looking specifically for risks, misclassifications, and hidden dangers.
 """
 
 from typing import Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 from .common import generate_id, utc_now
@@ -82,32 +82,31 @@ class CriticVerdict(BaseModel):
         description="Time taken for critic analysis"
     )
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "critic_id": "crit_abc123",
-                "plan_id": "plan_xyz789",
-                "judgment": "suspicious",
-                "confidence": 0.85,
-                "risk_adjustment": 0.2,
-                "hidden_risks": [
-                    "Euphemism 'organize' may indicate deletion intent",
-                    "Target path includes system directories"
-                ],
-                "reasoning": "While the request appears benign on the surface, "
-                            "the combination of 'organize' and 'root directory' "
-                            "suggests potential destructive intent.",
-                "concerns": [
-                    "Vague action verb 'organize' has multiple interpretations",
-                    "Root directory access is rarely needed for legitimate tasks"
-                ],
-                "requires_human_review": True,
-                "recommended_action": "escalate",
-                "model_used": "gpt-4o-mini",
-                "created_at": "2026-01-08T12:00:00Z",
-                "duration_ms": 1250.5
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "critic_id": "crit_abc123",
+            "plan_id": "plan_xyz789",
+            "judgment": "suspicious",
+            "confidence": 0.85,
+            "risk_adjustment": 0.2,
+            "hidden_risks": [
+                "Euphemism 'organize' may indicate deletion intent",
+                "Target path includes system directories"
+            ],
+            "reasoning": "While the request appears benign on the surface, "
+                        "the combination of 'organize' and 'root directory' "
+                        "suggests potential destructive intent.",
+            "concerns": [
+                "Vague action verb 'organize' has multiple interpretations",
+                "Root directory access is rarely needed for legitimate tasks"
+            ],
+            "requires_human_review": True,
+            "recommended_action": "escalate",
+            "model_used": "gpt-4o-mini",
+            "created_at": "2026-01-08T12:00:00Z",
+            "duration_ms": 1250.5
         }
+    })
 
 
 class CriticRequest(BaseModel):

@@ -9,7 +9,7 @@ Handles all database operations for the proof chain.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select, func
@@ -110,7 +110,7 @@ class ProofRepository:
             state.last_hash = last_hash
             state.chain_length = chain_length
             state.version = state.version + 1
-            state.updated_at = datetime.utcnow()
+            state.updated_at = datetime.now(timezone.utc)
         else:
             state = ChainStateDB(
                 id=1,

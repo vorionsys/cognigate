@@ -6,7 +6,7 @@ INTENT layer models - Goal processing and normalization.
 """
 
 from typing import Optional, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 from .common import generate_id, utc_now, TrustLevel, EntityId
@@ -54,24 +54,23 @@ class IntentResponse(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
     error: Optional[str] = None
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "intent_id": "int_abc123def456",
-                "entity_id": "agent_001",
-                "status": "normalized",
-                "plan": {
-                    "plan_id": "plan_xyz789",
-                    "goal": "Send email to user@example.com",
-                    "tools_required": ["email_send"],
-                    "endpoints_required": ["smtp.example.com"],
-                    "data_classifications": ["pii_email"],
-                    "risk_indicators": {"data_exposure": 0.3},
-                    "risk_score": 0.3,
-                    "reasoning_trace": "Simple email send operation with PII handling"
-                },
-                "trust_level": 2,
-                "trust_score": 450,
-                "created_at": "2026-01-08T12:00:00Z"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "intent_id": "int_abc123def456",
+            "entity_id": "agent_001",
+            "status": "normalized",
+            "plan": {
+                "plan_id": "plan_xyz789",
+                "goal": "Send email to user@example.com",
+                "tools_required": ["email_send"],
+                "endpoints_required": ["smtp.example.com"],
+                "data_classifications": ["pii_email"],
+                "risk_indicators": {"data_exposure": 0.3},
+                "risk_score": 0.3,
+                "reasoning_trace": "Simple email send operation with PII handling"
+            },
+            "trust_level": 2,
+            "trust_score": 450,
+            "created_at": "2026-01-08T12:00:00Z"
         }
+    })

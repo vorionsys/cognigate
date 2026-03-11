@@ -58,7 +58,7 @@ class TestProofLifecycle:
     """Test the full proof lifecycle via API."""
 
     async def _create_enforcement(self, client: AsyncClient) -> dict:
-        """Helper: run enforce to get a verdict."""
+        """Helper: run enforce and return a ProofRequest-compatible dict."""
         plan = {
             "plan_id": "plan_proof_test",
             "goal": "Read test file",
@@ -74,7 +74,20 @@ class TestProofLifecycle:
             "plan": plan,
         })
         assert resp.status_code == 200
-        return resp.json()
+        verdict = resp.json()
+        _action_map = {"allow": "allowed", "deny": "denied", "escalate": "escalated", "modify": "modified"}
+        return {
+            "entity_id": "agent_proof",
+            "action": "enforcement",
+            "outcome": _action_map.get(verdict.get("action", "allow"), "allowed"),
+            "intent_id": verdict.get("intent_id"),
+            "verdict_id": verdict.get("verdict_id"),
+            "details": {
+                "plan_id": verdict.get("plan_id"),
+                "policies": verdict.get("policies_evaluated", []),
+                "allowed": verdict.get("allowed"),
+            },
+        }
 
     async def test_create_proof_record(self, proof_client):
         verdict = await self._create_enforcement(proof_client)

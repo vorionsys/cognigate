@@ -17,8 +17,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import verify_api_key
-from app.models.proof import ProofRecord, ProofQuery, ProofVerification, ProofStats
-from app.models.enforce import EnforceResponse
+from app.models.proof import ProofRecord, ProofQuery, ProofVerification, ProofStats, ProofRequest
+from app.models.common import generate_id
 from app.db import get_session, ProofRepository
 from app.core.signatures import sign_proof_record, verify_proof_signature
 from app.core.evidence_hook import on_proof_created
@@ -125,15 +125,15 @@ async def create_proof_record(
 
 @router.post("/proof", response_model=ProofRecord)
 async def create_proof(
-    verdict: EnforceResponse,
+    request: ProofRequest,
     _: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session),
 ) -> ProofRecord:
     """
-    Create an immutable proof record from an enforcement verdict.
+    Create an immutable proof record for a governance decision.
 
     This endpoint:
-    1. Receives a verdict from ENFORCE
+    1. Accepts a minimal proof request (entity, action, outcome)
     2. Creates a cryptographically linked proof record
     3. Adds it to the proof chain
     4. Returns the proof record
@@ -142,17 +142,13 @@ async def create_proof(
     """
     record = await create_proof_record(
         session=session,
-        intent_id=verdict.intent_id,
-        verdict_id=verdict.verdict_id,
-        entity_id="system",  # Would come from context
-        action_type="enforcement",
-        decision=ACTION_TO_DECISION.get(verdict.action, verdict.action),
-        inputs={"plan_id": verdict.plan_id, "policies": verdict.policies_evaluated},
-        outputs={
-            "allowed": verdict.allowed,
-            "violations": len(verdict.violations),
-            "trust_impact": verdict.trust_impact,
-        },
+        intent_id=request.intent_id or generate_id("int_"),
+        verdict_id=request.verdict_id or generate_id("vrd_"),
+        entity_id=request.entity_id,
+        action_type=request.action,
+        decision=request.outcome,
+        inputs=request.details or {},
+        outputs={"outcome": request.outcome},
     )
 
     return record

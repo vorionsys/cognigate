@@ -8,7 +8,7 @@ Common types and models used across the Cognigate Engine.
 from typing import Literal, Annotated
 from pydantic import BaseModel, Field
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # Type aliases
@@ -35,8 +35,14 @@ def generate_id(prefix: str = "") -> str:
 
 
 def utc_now() -> datetime:
-    """Get current UTC timestamp."""
-    return datetime.utcnow()
+    """Get current UTC timestamp as a naive datetime.
+
+    Naive UTC is required for proof-chain hash consistency: timezone-aware
+    datetimes produce a different isoformat (+00:00 suffix) than what SQLite
+    returns on roundtrip (naive). Using .replace(tzinfo=None) avoids the
+    deprecated datetime.utcnow() while preserving the same string format.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class BaseResponse(BaseModel):

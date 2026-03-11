@@ -9,7 +9,7 @@ Manages trust admission, scoring, signals, and revocation.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -129,8 +129,8 @@ async def admit_agent(
         "capabilities": body.capabilities,
         "observationTier": body.observationTier,
         "isRevoked": False,
-        "admittedAt": datetime.utcnow().isoformat(),
-        "lastActivityAt": datetime.utcnow().isoformat(),
+        "admittedAt": datetime.now(timezone.utc).isoformat(),
+        "lastActivityAt": datetime.now(timezone.utc).isoformat(),
     }
     _trust_signals[body.agentId] = []
 
@@ -221,7 +221,7 @@ async def get_trust(
     if last_activity:
         try:
             last_dt = datetime.fromisoformat(last_activity) if isinstance(last_activity, str) else last_activity
-            days_inactive = (datetime.utcnow() - last_dt).total_seconds() / 86400.0
+            days_inactive = (datetime.now(timezone.utc) - last_dt).total_seconds() / 86400.0
         except (ValueError, TypeError):
             days_inactive = 0.0
     effective_score = apply_decay(raw_score, days_inactive) if days_inactive >= 1.0 else raw_score
@@ -238,7 +238,7 @@ async def get_trust(
         "isRevoked": info["isRevoked"],
         "daysInactive": round(days_inactive, 1),
         "decayApplied": effective_score < raw_score,
-        "lastUpdated": datetime.utcnow().isoformat(),
+        "lastUpdated": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -286,7 +286,7 @@ async def record_signal(
     new_tier = score_to_tier(new_score)
     info["score"] = new_score
     info["tier"] = new_tier
-    info["lastActivityAt"] = datetime.utcnow().isoformat()  # Reset decay timer
+    info["lastActivityAt"] = datetime.now(timezone.utc).isoformat()  # Reset decay timer
 
     # Record signal history
     signal_record = {
@@ -295,7 +295,7 @@ async def record_signal(
         "weight": body.weight,
         "delta": delta,
         "context": body.context,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     _trust_signals.setdefault(agent_id, []).append(signal_record)
 
@@ -318,7 +318,7 @@ async def record_signal(
     if db_state:
         db_state.score = new_score
         db_state.tier = new_tier
-        db_state.last_activity_at = datetime.utcnow()
+        db_state.last_activity_at = datetime.now(timezone.utc)
 
     tier_info = TIER_THRESHOLDS[new_tier]
     return {
@@ -402,7 +402,7 @@ async def get_decay_status(
     if last_activity:
         try:
             last_dt = datetime.fromisoformat(last_activity) if isinstance(last_activity, str) else last_activity
-            days_inactive = (datetime.utcnow() - last_dt).total_seconds() / 86400.0
+            days_inactive = (datetime.now(timezone.utc) - last_dt).total_seconds() / 86400.0
         except (ValueError, TypeError):
             days_inactive = 0.0
 

@@ -17,7 +17,7 @@ from typing import Optional
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -136,7 +136,7 @@ async def health_check() -> HealthResponse:
         status=overall,
         service="cognigate-engine",
         version="0.1.0",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         uptime_seconds=round(time.monotonic() - _start_time, 2),
         subsystems=subsystems,
     )
