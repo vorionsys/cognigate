@@ -232,9 +232,11 @@ class TestTrustRetrieval:
         resp = await client.get("/v1/trust/agent_get")
         data = resp.json()
         assert data["agentId"] == "agent_get"
-        assert data["score"] == 200
+        assert data["score"] == 200  # No decay within 1 day of admission
+        assert data["rawScore"] == 200
         assert data["tier"] == 1
         assert not data["isRevoked"]
+        assert data["decayApplied"] is False
 
     async def test_get_trust_unknown_agent(self, client):
         resp = await client.get("/v1/trust/unknown_agent")

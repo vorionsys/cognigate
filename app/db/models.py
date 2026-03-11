@@ -93,6 +93,7 @@ class TrustStateDB(Base):
     is_revoked: Mapped[bool] = mapped_column(Integer, default=False)  # SQLite compat
     admitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_activity_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)  # 182-day decay timer
 
 
 class TrustSignalDB(Base):

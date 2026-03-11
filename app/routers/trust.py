@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import verify_api_key
+from app.core.trust_decay import apply_decay, compute_decay_factor, DECAY_HALF_LIFE_DAYS, DECAY_FLOOR
 from app.constants_bridge import (
     TIER_THRESHOLDS,
     TrustTier,
@@ -129,6 +130,7 @@ async def admit_agent(
         "observationTier": body.observationTier,
         "isRevoked": False,
         "admittedAt": datetime.utcnow().isoformat(),
+        "lastActivityAt": datetime.utcnow().isoformat(),
     }
     _trust_signals[body.agentId] = []
 
@@ -200,6 +202,7 @@ async def get_trust(
                 "observationTier": db_state.observation_tier,
                 "isRevoked": bool(db_state.is_revoked),
                 "admittedAt": db_state.admitted_at.isoformat(),
+                "lastActivityAt": db_state.last_activity_at.isoformat() if db_state.last_activity_at else db_state.admitted_at.isoformat(),
             }
             _trust_state[agent_id] = info
 
@@ -211,14 +214,30 @@ async def get_trust(
             "tier": None,
         }
 
-    tier_info = TIER_THRESHOLDS[info["tier"]]
+    # Apply 182-day stepped inactivity decay (only for inactivity >= 1 day)
+    raw_score = info["score"]
+    last_activity = info.get("lastActivityAt")
+    days_inactive = 0.0
+    if last_activity:
+        try:
+            last_dt = datetime.fromisoformat(last_activity) if isinstance(last_activity, str) else last_activity
+            days_inactive = (datetime.utcnow() - last_dt).total_seconds() / 86400.0
+        except (ValueError, TypeError):
+            days_inactive = 0.0
+    effective_score = apply_decay(raw_score, days_inactive) if days_inactive >= 1.0 else raw_score
+    effective_tier = score_to_tier(effective_score)
+
+    tier_info = TIER_THRESHOLDS[effective_tier]
     return {
         "agentId": agent_id,
-        "score": info["score"],
-        "tier": info["tier"],
+        "score": effective_score,
+        "rawScore": raw_score,
+        "tier": effective_tier,
         "tierName": tier_info["name"],
         "observationCeiling": info["ceiling"],
         "isRevoked": info["isRevoked"],
+        "daysInactive": round(days_inactive, 1),
+        "decayApplied": effective_score < raw_score,
         "lastUpdated": datetime.utcnow().isoformat(),
     }
 
@@ -267,6 +286,7 @@ async def record_signal(
     new_tier = score_to_tier(new_score)
     info["score"] = new_score
     info["tier"] = new_tier
+    info["lastActivityAt"] = datetime.utcnow().isoformat()  # Reset decay timer
 
     # Record signal history
     signal_record = {
@@ -298,6 +318,7 @@ async def record_signal(
     if db_state:
         db_state.score = new_score
         db_state.tier = new_tier
+        db_state.last_activity_at = datetime.utcnow()
 
     tier_info = TIER_THRESHOLDS[new_tier]
     return {
@@ -357,4 +378,47 @@ async def get_trust_history(agent_id: str, limit: int = 50, _: str = Depends(ver
         "agentId": agent_id,
         "count": len(recent),
         "signals": list(reversed(recent)),
+    }
+
+
+@router.get("/trust/{agent_id}/decay", summary="Trust decay status")
+async def get_decay_status(
+    agent_id: str,
+    _: str = Depends(verify_api_key),
+) -> dict:
+    """
+    Get the inactivity decay status for an agent.
+
+    Returns the current decay factor, effective score after decay,
+    and the 182-day milestone schedule with the agent's position.
+    """
+    info = _trust_state.get(agent_id)
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Agent not admitted: {agent_id}")
+
+    raw_score = info["score"]
+    last_activity = info.get("lastActivityAt")
+    days_inactive = 0.0
+    if last_activity:
+        try:
+            last_dt = datetime.fromisoformat(last_activity) if isinstance(last_activity, str) else last_activity
+            days_inactive = (datetime.utcnow() - last_dt).total_seconds() / 86400.0
+        except (ValueError, TypeError):
+            days_inactive = 0.0
+
+    factor = compute_decay_factor(days_inactive)
+    effective_score = apply_decay(raw_score, days_inactive)
+    effective_tier = score_to_tier(effective_score)
+
+    return {
+        "agentId": agent_id,
+        "rawScore": raw_score,
+        "effectiveScore": effective_score,
+        "effectiveTier": effective_tier,
+        "daysInactive": round(days_inactive, 2),
+        "decayFactor": round(factor, 4),
+        "halfLifeDays": DECAY_HALF_LIFE_DAYS,
+        "floorPercent": int(DECAY_FLOOR * 100),
+        "lastActivityAt": last_activity,
+        "decayApplied": effective_score < raw_score,
     }
