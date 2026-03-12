@@ -6,8 +6,10 @@ INTENT → ENFORCE → PROOF · Live at [cognigate.dev](https://cognigate.dev)
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green)](https://fastapi.tiangolo.com)
+[![CI](https://github.com/vorionsys/cognigate/actions/workflows/ci.yml/badge.svg)](https://github.com/vorionsys/cognigate/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 ![Stars](https://img.shields.io/github/stars/vorionsys/cognigate?style=social)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/basis-protocol)
 
 > **This is v0.1 — early, experimental, and explicitly not production-hardened.**
 > We built it because we needed it ourselves and wanted to share it humbly with the community.
@@ -131,6 +133,13 @@ Cognigate's Python test suite covers compliance verification across 13 framework
 Created by **Alex Blanc** and **Ryan Cason (Bo Xandar Lee)** — two former banquet servers who taught themselves to code with AI and wanted to give something back to the community.
 
 [Read our full story →](https://vorion.org/about)
+
+## Support
+
+- **Documentation**: [cognigate.dev/docs](https://cognigate.dev/docs)
+- **Issues**: [GitHub Issues](https://github.com/vorionsys/cognigate/issues)
+- **Discord**: [Join the community](https://discord.gg/basis-protocol)
+- **Email**: hello@vorion.org
 
 ## License
 
